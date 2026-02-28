@@ -3,105 +3,75 @@ import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { getUserHistory, getUserWatchlist } from "@/lib/actions";
 
-// 1. TRADUCTIONS
-const TRANSLATIONS = {
-	fr: {
-		home: "Accueil",
-		movies: "Films",
-		series: "Séries",
-		animes: "Animes",
-		search: "RECHERCHER...",
-		trending: "Tendances",
-		results: "Résultats :",
-		no_results: "Aucun contenu trouvé...",
-		watch: "▶ REGARDER",
-		continue_watching: "REPRENDRE",
-		my_list: "MA LISTE",
-		prev_page: "←",
-		next_page: "→",
-	},
-	en: {
-		home: "Home",
-		movies: "Movies",
-		series: "Series",
-		animes: "Anime",
-		search: "SEARCH...",
-		trending: "Trending",
-		results: "Results:",
-		no_results: "No content found...",
-		watch: "▶ WATCH NOW",
-		continue_watching: "CONTINUE WATCHING",
-		my_list: "MY LIST",
-		prev_page: "←",
-		next_page: "→",
-	},
+// ─── TEXTES (tout en français, plus besoin de traductions) ───────────────────
+const T = {
+	home: "Accueil",
+	movies: "Films",
+	series: "Séries",
+	animes: "Animes",
+	search: "RECHERCHER...",
+	trending: "Tendances",
+	results: "Résultats pour",
+	no_results: "Aucun contenu trouvé...",
+	watch: "▶ REGARDER",
+	continue_watching: "REPRENDRE",
+	my_list: "MA LISTE",
+	prev_page: "←",
+	next_page: "→",
 };
 
-// 2. GENRES
+// ─── GENRES ──────────────────────────────────────────────────────────────────
 const GENRES = {
 	movie: [
-		{ id: 28, name: { fr: "Action", en: "Action" } },
-		{ id: 12, name: { fr: "Aventure", en: "Adventure" } },
-		{ id: 16, name: { fr: "Animation", en: "Animation" } },
-		{ id: 35, name: { fr: "Comédie", en: "Comedy" } },
-		{ id: 80, name: { fr: "Crime", en: "Crime" } },
-		{ id: 18, name: { fr: "Drame", en: "Drama" } },
-		{ id: 14, name: { fr: "Fantastique", en: "Fantasy" } },
-		{ id: 27, name: { fr: "Horreur", en: "Horror" } },
-		{ id: 9648, name: { fr: "Mystère", en: "Mystery" } },
-		{ id: 10749, name: { fr: "Romance", en: "Romance" } },
-		{ id: 878, name: { fr: "SF", en: "Sci-Fi" } },
-		{ id: 53, name: { fr: "Thriller", en: "Thriller" } },
+		{ id: 28, name: "Action" },
+		{ id: 12, name: "Aventure" },
+		{ id: 16, name: "Animation" },
+		{ id: 35, name: "Comédie" },
+		{ id: 80, name: "Crime" },
+		{ id: 18, name: "Drame" },
+		{ id: 14, name: "Fantastique" },
+		{ id: 27, name: "Horreur" },
+		{ id: 9648, name: "Mystère" },
+		{ id: 10749, name: "Romance" },
+		{ id: 878, name: "Science-Fiction" },
+		{ id: 53, name: "Thriller" },
 	],
 	tv: [
-		{ id: 10759, name: { fr: "Action", en: "Action" } },
-		{ id: 16, name: { fr: "Animation", en: "Animation" } },
-		{ id: 35, name: { fr: "Comédie", en: "Comedy" } },
-		{ id: 80, name: { fr: "Crime", en: "Crime" } },
-		{ id: 99, name: { fr: "Documentaire", en: "Documentary" } },
-		{ id: 18, name: { fr: "Drame", en: "Drama" } },
-		{ id: 9648, name: { fr: "Mystère", en: "Mystery" } },
-		{ id: 10765, name: { fr: "Sci-Fi & Fantasy", en: "Sci-Fi & Fantasy" } },
+		{ id: 10759, name: "Action & Aventure" },
+		{ id: 16, name: "Animation" },
+		{ id: 35, name: "Comédie" },
+		{ id: 80, name: "Crime" },
+		{ id: 99, name: "Documentaire" },
+		{ id: 18, name: "Drame" },
+		{ id: 9648, name: "Mystère" },
+		{ id: 10765, name: "Sci-Fi & Fantastique" },
 	],
 	anime: [
-		{ id: 10759, name: { fr: "Action", en: "Action" } },
-		{ id: 35, name: { fr: "Comédie", en: "Comedy" } },
-		{ id: 18, name: { fr: "Drame", en: "Drama" } },
-		{ id: 10765, name: { fr: "Fantaisie", en: "Fantasy" } },
-		{ id: 9648, name: { fr: "Mystère", en: "Mystery" } },
-		{ id: 10751, name: { fr: "Famille", en: "Family" } },
+		{ id: 10759, name: "Action" },
+		{ id: 35, name: "Comédie" },
+		{ id: 18, name: "Drame" },
+		{ id: 10765, name: "Fantaisie" },
+		{ id: 9648, name: "Mystère" },
+		{ id: 10751, name: "Famille" },
 	],
 };
 
-// 3. RÉCUPÉRATION DATA
-async function getData(
-	type = "all",
-	query = "",
-	genreId = "",
-	lang = "fr",
-	page = 1,
-) {
+// ─── FETCH STANDARD (tendances / découverte) ─────────────────────────────────
+async function getData(type = "all", genreId = "", page = 1) {
 	const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
-	const tmdbLang = lang === "fr" ? "fr-FR" : "en-US";
 
 	const getUrl = (p) => {
-		if (query) {
-			let searchType = "multi";
-			if (type === "movie") searchType = "movie";
-			if (type === "tv" || type === "anime") searchType = "tv";
-			return `https://api.themoviedb.org/3/search/${searchType}?api_key=${apiKey}&language=${tmdbLang}&query=${encodeURIComponent(query)}&page=${p}`;
-		}
 		if (genreId) {
 			const baseType = type === "anime" ? "tv" : type;
 			const animeFilter =
 				type === "anime" ? "&with_original_language=ja&with_genres=16" : "";
-			return `https://api.themoviedb.org/3/discover/${baseType}?api_key=${apiKey}&language=${tmdbLang}&with_genres=${genreId}${animeFilter}&sort_by=popularity.desc&page=${p}`;
+			return `https://api.themoviedb.org/3/discover/${baseType}?api_key=${apiKey}&language=fr-FR&with_genres=${genreId}${animeFilter}&sort_by=popularity.desc&page=${p}`;
 		}
 		if (type === "anime")
-			return `https://api.themoviedb.org/3/discover/tv?api_key=${apiKey}&language=${tmdbLang}&with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${p}`;
+			return `https://api.themoviedb.org/3/discover/tv?api_key=${apiKey}&language=fr-FR&with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${p}`;
 		if (type === "all")
-			return `https://api.themoviedb.org/3/trending/all/week?api_key=${apiKey}&language=${tmdbLang}&page=${p}`;
-		return `https://api.themoviedb.org/3/trending/${type}/week?api_key=${apiKey}&language=${tmdbLang}&page=${p}`;
+			return `https://api.themoviedb.org/3/trending/all/week?api_key=${apiKey}&language=fr-FR&page=${p}`;
+		return `https://api.themoviedb.org/3/trending/${type}/week?api_key=${apiKey}&language=fr-FR&page=${p}`;
 	};
 
 	const [res1, res2] = await Promise.all([
@@ -109,34 +79,126 @@ async function getData(
 		fetch(getUrl(page * 2)),
 	]);
 	const [data1, data2] = await Promise.all([res1.json(), res2.json()]);
-	let combined = [...(data1.results || []), ...(data2.results || [])];
+	const combined = [...(data1.results || []), ...(data2.results || [])];
 
 	const filtered = combined.filter(
 		(item) =>
-			item.poster_path !== null &&
-			item.backdrop_path !== null &&
-			item.media_type !== "person",
+			item.poster_path && item.backdrop_path && item.media_type !== "person",
 	);
-
-	const uniqueResults = Array.from(
-		new Map(filtered.map((item) => [item.id, item])).values(),
-	);
+	const unique = Array.from(new Map(filtered.map((i) => [i.id, i])).values());
 
 	return {
-		results: uniqueResults,
+		results: unique,
 		total_pages: Math.ceil((data1.total_results || 0) / 18),
 	};
 }
 
-// 4. COMPOSANT HOME
+// ─── RECHERCHE BILINGUE (FR + EN) avec score de pertinence ──────────────────
+async function searchData(type, query, page = 1) {
+	const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+
+	const buildUrl = (lang, p) => {
+		let searchType = "multi";
+		if (type === "movie") searchType = "movie";
+		if (type === "tv" || type === "anime") searchType = "tv";
+		return `https://api.themoviedb.org/3/search/${searchType}?api_key=${apiKey}&language=${lang}&query=${encodeURIComponent(query)}&page=${p}&include_adult=false`;
+	};
+
+	// On cherche en français ET en anglais en parallèle, sur 2 pages chacun
+	const [frRes1, frRes2, enRes1, enRes2] = await Promise.all([
+		fetch(buildUrl("fr-FR", page * 2 - 1)),
+		fetch(buildUrl("fr-FR", page * 2)),
+		fetch(buildUrl("en-US", page * 2 - 1)),
+		fetch(buildUrl("en-US", page * 2)),
+	]);
+
+	const [frData1, frData2, enData1, enData2] = await Promise.all([
+		frRes1.json(),
+		frRes2.json(),
+		enRes1.json(),
+		enRes2.json(),
+	]);
+
+	// Fusionner tous les résultats
+	const allResults = [
+		...(frData1.results || []),
+		...(frData2.results || []),
+		...(enData1.results || []),
+		...(enData2.results || []),
+	];
+
+	// Filtrer personnes et sans poster
+	const filtered = allResults.filter(
+		(item) => item.poster_path && item.media_type !== "person",
+	);
+
+	// Dédupliquer par ID (garder la version avec poster + backdrop si possible)
+	const map = new Map();
+	for (const item of filtered) {
+		const existing = map.get(item.id);
+		if (!existing || (item.backdrop_path && !existing.backdrop_path)) {
+			map.set(item.id, item);
+		}
+	}
+	const unique = Array.from(map.values());
+
+	// Filtrer par type si nécessaire
+	const typeFiltered = unique.filter((item) => {
+		if (type === "movie")
+			return item.media_type === "movie" || !item.media_type;
+		if (type === "tv" || type === "anime")
+			return item.media_type === "tv" || !item.media_type;
+		return true; // "all" → on garde tout
+	});
+
+	// ── Score de pertinence ──
+	const q = query.toLowerCase();
+	const scored = typeFiltered.map((item) => {
+		const title = (item.title || item.name || "").toLowerCase();
+		const originalTitle = (
+			item.original_title ||
+			item.original_name ||
+			""
+		).toLowerCase();
+		let score = 0;
+
+		// Correspondance exacte → très fort bonus
+		if (title === q || originalTitle === q) score += 100;
+		// Commence par la requête
+		else if (title.startsWith(q) || originalTitle.startsWith(q)) score += 60;
+		// Contient la requête
+		else if (title.includes(q) || originalTitle.includes(q)) score += 30;
+
+		// Popularité (normalisée)
+		score += Math.min((item.popularity || 0) / 10, 20);
+
+		// Bonus si note élevée
+		if (item.vote_average >= 7) score += 10;
+		if (item.vote_count > 1000) score += 5;
+
+		// Malus si pas de backdrop
+		if (!item.backdrop_path) score -= 10;
+
+		return { ...item, _score: score };
+	});
+
+	// Trier par score décroissant
+	scored.sort((a, b) => b._score - a._score);
+
+	return {
+		results: scored,
+		total_pages: Math.max(frData1.total_pages || 1, enData1.total_pages || 1),
+	};
+}
+
+// ─── PAGE PRINCIPALE ─────────────────────────────────────────────────────────
 export default async function Home({ searchParams }) {
 	const sp = await searchParams;
-	const lang = sp?.lang || "fr";
+	// On ignore sp.lang — tout est en français désormais
 	const currentType = sp?.type || "all";
 	const query = sp?.q || "";
 	const genreId = sp?.genre || "";
 	const currentPage = parseInt(sp?.page) || 1;
-	const t = TRANSLATIONS[lang];
 
 	const { userId } = await auth();
 	let history = [];
@@ -153,40 +215,54 @@ export default async function Home({ searchParams }) {
 			currentType !== "all" ? w.filter((x) => x.media_type === currentType) : w;
 	}
 
-	if (isSearchOrGenre) {
+	if (query) {
+		// RECHERCHE BILINGUE
+		const data = await searchData(
+			currentType === "all" ? "multi" : currentType,
+			query,
+			currentPage,
+		);
+		const items = (data.results || []).map((it) => ({
+			...it,
+			media_type:
+				currentType === "anime" ? "anime" : it.media_type || currentType,
+		}));
+		sections.push({
+			title: `${T.results} "${query}"`,
+			items,
+			isGrid: true,
+			totalPages: Math.min(data.total_pages, 500),
+			currentPage,
+		});
+	} else if (genreId) {
+		// EXPLORATION PAR GENRE
 		const data = await getData(
 			currentType === "all" ? "movie" : currentType,
-			query,
 			genreId,
-			lang,
 			currentPage,
 		);
 		let items = data.results || [];
-		if (genreId && items.length > 0 && currentPage === 1) {
+		if (items.length > 0 && currentPage === 1) {
 			heroItem = items[0];
 			items = items.slice(1);
 		}
-		let finalCount =
-			items.length >= 6
-				? Math.floor(Math.min(items.length, 18) / 6) * 6
-				: items.length;
-		items = items.slice(0, finalCount);
 		sections.push({
-			title: query ? `${t.results} "${query}"` : "Exploration",
+			title: "Exploration",
 			items: items.map((it) => ({
 				...it,
 				media_type: currentType === "anime" ? "anime" : it.media_type,
 			})),
 			isGrid: true,
-			totalPages: data.total_pages > 500 ? 500 : data.total_pages,
+			totalPages: Math.min(data.total_pages, 500),
 			currentPage,
 		});
 	} else if (currentType === "all") {
-		const trendingData = await getData("all", "", "", lang);
+		// PAGE D'ACCUEIL
+		const trendingData = await getData("all");
 		heroItem = trendingData.results?.[0];
 		if (history.length > 0)
 			sections.push({
-				title: t.continue_watching,
+				title: T.continue_watching,
 				items: history.map((h) => ({
 					...h,
 					id: h.media_id,
@@ -199,28 +275,31 @@ export default async function Home({ searchParams }) {
 			});
 		if (watchlist.length > 0)
 			sections.push({
-				title: t.my_list,
+				title: T.my_list,
 				items: watchlist.map((w) => ({ ...w, id: w.media_id })),
 				isGrid: false,
 			});
-		const trendingMovies = await getData("movie", "", "", lang);
+		const [trendingMovies, trendingTV] = await Promise.all([
+			getData("movie"),
+			getData("tv"),
+		]);
 		sections.push({
-			title: `${t.trending} - ${t.movies}`,
+			title: `${T.trending} — ${T.movies}`,
 			items: trendingMovies.results,
 			isGrid: false,
 		});
-		const trendingTV = await getData("tv", "", "", lang);
 		sections.push({
-			title: `${t.trending} - ${t.series}`,
+			title: `${T.trending} — ${T.series}`,
 			items: trendingTV.results,
 			isGrid: false,
 		});
 	} else {
-		const trendingData = await getData(currentType, "", "", lang);
+		// PAGE FILMS / SÉRIES / ANIMES
+		const trendingData = await getData(currentType);
 		heroItem = trendingData.results?.[0];
 		if (history.length > 0)
 			sections.push({
-				title: t.continue_watching,
+				title: T.continue_watching,
 				items: history.map((h) => ({
 					...h,
 					id: h.media_id,
@@ -230,25 +309,25 @@ export default async function Home({ searchParams }) {
 			});
 		if (watchlist.length > 0)
 			sections.push({
-				title: t.my_list,
+				title: T.my_list,
 				items: watchlist.map((w) => ({ ...w, id: w.media_id })),
 				isGrid: false,
 			});
 		sections.push({
-			title: t.trending,
+			title: T.trending,
 			items: (trendingData.results?.slice(1) || []).map((it) => ({
 				...it,
 				media_type: currentType,
 			})),
 			isGrid: false,
 		});
-		const topGenres = GENRES[currentType].slice(0, 4);
+		const topGenres = GENRES[currentType]?.slice(0, 4) || [];
 		const genreResults = await Promise.all(
-			topGenres.map((g) => getData(currentType, "", g.id.toString(), lang)),
+			topGenres.map((g) => getData(currentType, g.id.toString())),
 		);
 		topGenres.forEach((g, idx) => {
 			sections.push({
-				title: g.name[lang],
+				title: g.name,
 				items: (genreResults[idx].results || []).map((it) => ({
 					...it,
 					media_type: currentType,
@@ -258,34 +337,43 @@ export default async function Home({ searchParams }) {
 		});
 	}
 
+	// Pagination : liens helper
+	const pageLink = (p) => {
+		const params = new URLSearchParams({
+			type: currentType,
+			q: query,
+			genre: genreId,
+			page: p,
+		});
+		return `/?${params.toString()}`;
+	};
+	const gridSection = sections.find((s) => s.isGrid);
+
 	return (
 		<main className="min-h-screen bg-black text-white selection:bg-red-600 pb-32 md:pb-20 overflow-x-hidden">
-			{/* HEADER DESKTOP */}
+			{/* ── HEADER DESKTOP ── */}
 			<header className="fixed top-0 w-full z-50 bg-black/80 backdrop-blur-md border-b border-red-900/50 hidden md:block">
 				<div className="px-6 md:px-12 py-4 flex justify-between items-center gap-4">
-					<Link href={`/?lang=${lang}`}>
+					<Link href="/">
 						<h1 className="text-4xl font-black uppercase italic tracking-tighter bg-gradient-to-r from-red-600 to-yellow-500 bg-clip-text text-transparent transform -skew-x-6 pr-2">
 							KATCH
 						</h1>
 					</Link>
+
 					<nav className="flex items-center gap-6 text-xs font-black uppercase italic tracking-widest">
 						{["all", "movie", "tv", "anime"].map((type) => (
 							<div key={type} className="group relative py-2">
 								<Link
-									href={`/?type=${type}&lang=${lang}`}
+									href={`/?type=${type}`}
 									className={`${currentType === type && !genreId ? "text-red-600" : "text-gray-400"} hover:text-white transition-colors`}
 								>
-									{
-										t[
-											type === "all"
-												? "home"
-												: type === "movie"
-													? "movies"
-													: type === "tv"
-														? "series"
-														: "animes"
-										]
-									}
+									{type === "all"
+										? T.home
+										: type === "movie"
+											? T.movies
+											: type === "tv"
+												? T.series
+												: T.animes}
 								</Link>
 								{type !== "all" && (
 									<div className="absolute top-full left-1/2 -translate-x-1/2 pt-4 hidden group-hover:block w-[320px]">
@@ -293,10 +381,10 @@ export default async function Home({ searchParams }) {
 											{GENRES[type].map((g) => (
 												<Link
 													key={g.id}
-													href={`/?type=${type}&genre=${g.id}&lang=${lang}`}
+													href={`/?type=${type}&genre=${g.id}`}
 													className="px-3 py-2 bg-black hover:bg-red-600 hover:text-white transition-colors text-[10px] rounded-sm truncate"
 												>
-													{g.name[lang]}
+													{g.name}
 												</Link>
 											))}
 										</div>
@@ -305,70 +393,45 @@ export default async function Home({ searchParams }) {
 							</div>
 						))}
 					</nav>
+
 					<div className="flex items-center gap-4">
-						<div className="flex bg-zinc-900 border border-red-900/30 rounded-sm p-1">
-							<Link
-								href={`/?lang=fr&type=${currentType}${query ? `&q=${query}` : ""}`}
-								className={`px-2 py-1 text-[10px] font-bold ${lang === "fr" ? "bg-red-600 text-white" : "text-zinc-500"}`}
-							>
-								FR
-							</Link>
-							<Link
-								href={`/?lang=en&type=${currentType}${query ? `&q=${query}` : ""}`}
-								className={`px-2 py-1 text-[10px] font-bold ${lang === "en" ? "bg-red-600 text-white" : "text-zinc-500"}`}
-							>
-								EN
-							</Link>
-						</div>
-						<div className="flex items-center gap-2">
-							<form action="/" method="GET" className="relative w-48">
-								<input type="hidden" name="lang" value={lang} />
-								<input
-									type="hidden"
-									name="type"
-									value={currentType === "all" ? "movie" : currentType}
-								/>
-								<input
-									type="text"
-									name="q"
-									placeholder={t.search}
-									defaultValue={query}
-									className="w-full bg-zinc-900 border border-red-900/30 rounded-sm px-4 py-2 text-xs font-bold focus:outline-none focus:border-red-600 uppercase italic"
-								/>
-							</form>
-							<SignedOut>
-								<SignInButton mode="modal">
-									<button className="text-[10px] font-black uppercase italic bg-white text-black px-4 py-2 rounded-sm hover:bg-red-600 hover:text-white transition-all whitespace-nowrap">
-										LOGIN
-									</button>
-								</SignInButton>
-							</SignedOut>
-							<SignedIn>
-								<UserButton afterSignOutUrl="/" />
-							</SignedIn>
-						</div>
+						<form action="/" method="GET" className="relative w-56">
+							<input
+								type="hidden"
+								name="type"
+								value={currentType === "all" ? "movie" : currentType}
+							/>
+							<input
+								type="text"
+								name="q"
+								placeholder={T.search}
+								defaultValue={query}
+								className="w-full bg-zinc-900 border border-red-900/30 rounded-sm px-4 py-2 text-xs font-bold focus:outline-none focus:border-red-600 uppercase italic"
+							/>
+						</form>
+						<SignedOut>
+							<SignInButton mode="modal">
+								<button className="text-[10px] font-black uppercase italic bg-white text-black px-4 py-2 rounded-sm hover:bg-red-600 hover:text-white transition-all whitespace-nowrap">
+									LOGIN
+								</button>
+							</SignInButton>
+						</SignedOut>
+						<SignedIn>
+							<UserButton afterSignOutUrl="/" />
+						</SignedIn>
 					</div>
 				</div>
 			</header>
 
-			{/* HEADER MOBILE */}
-			<header className="md:hidden fixed top-0 w-full z-50 bg-gradient-to-b from-black via-black/80 to-transparent transition-all duration-300">
+			{/* ── HEADER MOBILE ── */}
+			<header className="md:hidden fixed top-0 w-full z-50 bg-gradient-to-b from-black via-black/80 to-transparent">
 				<div className="px-4 py-3 flex justify-between items-center">
-					<Link href={`/?lang=${lang}`}>
+					<Link href="/">
 						<h1 className="text-3xl font-black uppercase italic tracking-tighter text-red-600 transform -skew-x-6">
 							KATCH
 						</h1>
 					</Link>
 					<div className="flex items-center gap-3">
-						{/* BOUTON LANGUE MOBILE */}
-						<div className="flex bg-zinc-900/80 border border-white/10 rounded-sm p-0.5 text-[8px] font-bold">
-							<Link
-								href={`/?lang=${lang === "fr" ? "en" : "fr"}&type=${currentType}${query ? `&q=${query}` : ""}`}
-								className="px-2 py-1 bg-red-600 text-white rounded-sm uppercase"
-							>
-								{lang === "fr" ? "EN" : "FR"}
-							</Link>
-						</div>
 						<SignedIn>
 							<UserButton afterSignOutUrl="/" />
 						</SignedIn>
@@ -383,11 +446,15 @@ export default async function Home({ searchParams }) {
 				</div>
 				<div className="px-4 pb-2">
 					<form action="/" method="GET">
-						<input type="hidden" name="lang" value={lang} />
+						<input
+							type="hidden"
+							name="type"
+							value={currentType === "all" ? "movie" : currentType}
+						/>
 						<input
 							type="text"
 							name="q"
-							placeholder={t.search}
+							placeholder={T.search}
 							defaultValue={query}
 							className="w-full bg-zinc-900/80 border border-white/5 rounded-sm px-4 py-2 text-[10px] font-bold uppercase italic focus:border-red-600 outline-none"
 						/>
@@ -395,7 +462,7 @@ export default async function Home({ searchParams }) {
 				</div>
 			</header>
 
-			{/* HERO */}
+			{/* ── HERO ── */}
 			{!query && heroItem && (
 				<section className="relative w-full h-[70vh] md:h-[85vh] flex items-end pb-12 md:pb-20 px-6 md:px-12">
 					<div className="absolute inset-0">
@@ -416,17 +483,17 @@ export default async function Home({ searchParams }) {
 							{heroItem.title || heroItem.name}
 						</h2>
 						<Link
-							href={`/watch/${heroItem.id}?type=${currentType === "all" ? heroItem.media_type || "movie" : currentType}&lang=${lang}`}
+							href={`/watch/${heroItem.id}?type=${currentType === "all" ? heroItem.media_type || "movie" : currentType}`}
 						>
 							<button className="bg-red-600 text-white px-8 md:px-12 py-3 md:py-4 font-black text-sm md:text-xl uppercase italic rounded-sm hover:scale-105 transition-all shadow-xl">
-								{t.watch}
+								{T.watch}
 							</button>
 						</Link>
 					</div>
 				</section>
 			)}
 
-			{/* SECTIONS CONTENU */}
+			{/* ── CONTENU ── */}
 			<div
 				className={`${!query && heroItem ? "-mt-10" : "pt-32"} relative z-20 flex flex-col gap-10`}
 			>
@@ -436,17 +503,46 @@ export default async function Home({ searchParams }) {
 							<span className="text-red-600">///</span> {sec.title}
 						</h3>
 						{sec.isGrid ? (
-							<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
-								{sec.items.map((it) => (
-									<PosterCard
-										key={it.id}
-										item={it}
-										currentType={currentType}
-										lang={lang}
-										isGrid={true}
-									/>
-								))}
-							</div>
+							<>
+								{sec.items.length === 0 ? (
+									<p className="text-zinc-500 font-black uppercase italic text-sm">
+										{T.no_results}
+									</p>
+								) : (
+									<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
+										{sec.items.map((it) => (
+											<PosterCard
+												key={it.id}
+												item={it}
+												currentType={currentType}
+												isGrid={true}
+											/>
+										))}
+									</div>
+								)}
+								{/* Pagination */}
+								{sec.totalPages > 1 && (
+									<div className="flex items-center justify-center gap-4 mt-8">
+										{sec.currentPage > 1 && (
+											<Link href={pageLink(sec.currentPage - 1)}>
+												<button className="px-6 py-2 bg-zinc-900 border border-zinc-800 font-black text-xs uppercase hover:bg-red-600 hover:border-red-600 transition-all rounded-sm">
+													{T.prev_page}
+												</button>
+											</Link>
+										)}
+										<span className="text-xs font-black text-zinc-500 uppercase">
+											{sec.currentPage} / {sec.totalPages}
+										</span>
+										{sec.currentPage < sec.totalPages && (
+											<Link href={pageLink(sec.currentPage + 1)}>
+												<button className="px-6 py-2 bg-zinc-900 border border-zinc-800 font-black text-xs uppercase hover:bg-red-600 hover:border-red-600 transition-all rounded-sm">
+													{T.next_page}
+												</button>
+											</Link>
+										)}
+									</div>
+								)}
+							</>
 						) : (
 							<div className="flex overflow-x-auto gap-3 md:gap-4 pb-4 custom-scrollbar">
 								{sec.items.map((it) => (
@@ -454,7 +550,6 @@ export default async function Home({ searchParams }) {
 										key={it.id}
 										item={it}
 										currentType={currentType}
-										lang={lang}
 										isGrid={false}
 									/>
 								))}
@@ -464,11 +559,11 @@ export default async function Home({ searchParams }) {
 				))}
 			</div>
 
-			{/* BOTTOM NAV MOBILE */}
+			{/* ── BOTTOM NAV MOBILE ── */}
 			<nav className="md:hidden fixed bottom-0 w-full z-50 bg-black/95 backdrop-blur-lg border-t border-white/10 px-6 py-3 flex justify-between items-center pb-8">
 				{[
 					{
-						label: t.home,
+						label: T.home,
 						type: "all",
 						icon: (
 							<svg
@@ -484,7 +579,7 @@ export default async function Home({ searchParams }) {
 						),
 					},
 					{
-						label: t.movies,
+						label: T.movies,
 						type: "movie",
 						icon: (
 							<svg
@@ -500,7 +595,7 @@ export default async function Home({ searchParams }) {
 						),
 					},
 					{
-						label: t.series,
+						label: T.series,
 						type: "tv",
 						icon: (
 							<svg
@@ -516,7 +611,7 @@ export default async function Home({ searchParams }) {
 						),
 					},
 					{
-						label: t.animes,
+						label: T.animes,
 						type: "anime",
 						icon: (
 							<svg
@@ -533,7 +628,7 @@ export default async function Home({ searchParams }) {
 				].map((nav) => (
 					<Link
 						key={nav.type}
-						href={`/?type=${nav.type}&lang=${lang}`}
+						href={`/?type=${nav.type}`}
 						className={`flex flex-col items-center gap-1 ${currentType === nav.type ? "opacity-100 scale-110" : "opacity-50"}`}
 					>
 						<div
@@ -555,10 +650,16 @@ export default async function Home({ searchParams }) {
 	);
 }
 
-const PosterCard = ({ item, currentType, lang, isGrid }) => {
+// ─── CARTE POSTER ─────────────────────────────────────────────────────────────
+const PosterCard = ({ item, currentType, isGrid }) => {
+	const mediaType =
+		item.media_type ||
+		(currentType === "anime" ? "anime" : currentType) ||
+		"movie";
 	const watchUrl = item.progress
-		? `/watch/${item.id}?type=${item.media_type}&lang=${lang}&s=${item.progress.split(" ")[0].replace("S", "")}&e=${item.progress.split(" ")[1].replace("E", "")}`
-		: `/watch/${item.id}?type=${item.media_type || (currentType === "anime" ? "anime" : currentType)}&lang=${lang}`;
+		? `/watch/${item.id}?type=${mediaType}&s=${item.progress.split(" ")[0].replace("S", "")}&e=${item.progress.split(" ")[1].replace("E", "")}`
+		: `/watch/${item.id}?type=${mediaType}`;
+
 	return (
 		<Link
 			href={watchUrl}
@@ -572,7 +673,7 @@ const PosterCard = ({ item, currentType, lang, isGrid }) => {
 				)}
 				<img
 					src={`https://image.tmdb.org/t/p/w500${item.poster_path}`}
-					alt=""
+					alt={item.title || item.name || ""}
 					className="w-full h-full object-cover"
 				/>
 			</div>
