@@ -80,18 +80,18 @@ export default async function UniversalWatchPage({ params, searchParams }) {
 	if (lang === "fr") {
 		servers = {
 			multiembed: {
-				name: "🚀 LECTEUR AUTO",
+				name: "LECTEUR AUTO",
 				url: `https://multiembed.mov/?video_id=${id}&tmdb=1${isSeriesOrAnime ? `&s=${currentSeason}&e=${currentEpisode}` : ""}`,
 			},
 			vidsrc_me: {
-				name: "🌟 SOURCE 2",
+				name: "SOURCE 2",
 				url:
 					type === "movie"
 						? `https://vidsrc.me/embed/movie?tmdb=${id}`
 						: `https://vidsrc.me/embed/tv?tmdb=${id}&sea=${currentSeason}&epi=${currentEpisode}`,
 			},
 			vidsrc_xyz: {
-				name: "🎬 SOURCE 3",
+				name: "SOURCE 3",
 				url:
 					type === "movie"
 						? `https://vidsrc.xyz/embed/movie/${id}`
@@ -101,14 +101,14 @@ export default async function UniversalWatchPage({ params, searchParams }) {
 	} else {
 		servers = {
 			vidsrc_to: {
-				name: "🇬🇧 ENG 1",
+				name: "ENG 1",
 				url:
 					type === "movie"
 						? `https://vidlink.pro/movie/${id}`
 						: `https://vidlink.pro/tv/${id}/${currentSeason}/${currentEpisode}`,
 			},
 			vidlink: {
-				name: "🇬🇧 ENG 2",
+				name: "ENG 2",
 				url:
 					type === "movie"
 						? `https://vidsrc.to/embed/movie/${id}`
