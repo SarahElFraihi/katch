@@ -28,7 +28,7 @@ export default function RootLayout({ children }) {
 					colorPrimary: "#dc2626", // Rouge KATCH
 					colorBackground: "#0a0a0a", // Noir profond
 					colorText: "white",
-					borderRadius: "2px", /
+					borderRadius: "2px",
 					fontFamily: "var(--font-geist-sans)",
 				},
 				elements: {
@@ -44,8 +44,11 @@ export default function RootLayout({ children }) {
 			<html lang="fr">
 				<head>
 					<link rel="manifest" href="/manifest.json" />
+					<meta name="theme-color" content="#000000" />
 				</head>
-				<body className="antialiased bg-black">
+				<body
+					className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black`}
+				>
 					<SecurityShield />
 					<InstallPrompt />
 					{children}
