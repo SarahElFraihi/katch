@@ -32,7 +32,6 @@ const TRANSLATIONS = {
 async function getDetails(id, type, lang = "fr") {
 	const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
 	const tmdbLang = lang === "fr" ? "fr-FR" : "en-US";
-	// Pour TMDB, les animes sont techniquement des "tv"
 	const endpoint = type === "movie" ? "movie" : "tv";
 	const url = `https://api.themoviedb.org/3/${endpoint}/${id}?language=${tmdbLang}&api_key=${apiKey}`;
 	const res = await fetch(url);
@@ -68,7 +67,6 @@ export default async function UniversalWatchPage({ params, searchParams }) {
 			</div>
 		);
 
-	// 🔥 Modifié ici : On charge les épisodes si c'est une série OU un anime
 	const isSeriesOrAnime = type === "tv" || type === "anime";
 	const seasonData = isSeriesOrAnime
 		? await getSeasonDetails(id, currentSeason, lang)
@@ -78,7 +76,6 @@ export default async function UniversalWatchPage({ params, searchParams }) {
 	const hasNextEpisode =
 		seasonData && currentEpisode < seasonData.episodes?.length;
 
-	// --- LECTEURS IFRAME ---
 	let servers = {};
 	if (lang === "fr") {
 		servers = {
@@ -107,15 +104,15 @@ export default async function UniversalWatchPage({ params, searchParams }) {
 				name: "🇬🇧 ENG 1",
 				url:
 					type === "movie"
-						? `https://vidsrc.to/embed/movie/${id}`
-						: `https://vidsrc.to/embed/tv/${id}/${currentSeason}/${currentEpisode}`,
+						? `https://vidlink.pro/movie/${id}`
+						: `https://vidlink.pro/tv/${id}/${currentSeason}/${currentEpisode}`,
 			},
 			vidlink: {
 				name: "🇬🇧 ENG 2",
 				url:
 					type === "movie"
-						? `https://vidlink.pro/movie/${id}`
-						: `https://vidlink.pro/tv/${id}/${currentSeason}/${currentEpisode}`,
+						? `https://vidsrc.to/embed/movie/${id}`
+						: `https://vidsrc.to/embed/tv/${id}/${currentSeason}/${currentEpisode}`,
 			},
 		};
 	}
@@ -210,7 +207,6 @@ export default async function UniversalWatchPage({ params, searchParams }) {
 							</div>
 						</div>
 
-						{/* Navigation épisodes */}
 						{isSeriesOrAnime && (
 							<div className="flex justify-between mt-4">
 								{hasPrevEpisode ? (
@@ -239,25 +235,8 @@ export default async function UniversalWatchPage({ params, searchParams }) {
 								)}
 							</div>
 						)}
-
-						<div className="mt-8 bg-zinc-900/50 border border-white/5 p-6 rounded-sm">
-							<p className="text-gray-400 leading-relaxed font-medium text-sm md:text-base">
-								{data.overview || t.no_summary}
-							</p>
-							<div className="mt-4 flex flex-wrap gap-2">
-								{data.genres?.map((g) => (
-									<span
-										key={g.id}
-										className="bg-black border border-zinc-800 text-zinc-500 px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-sm"
-									>
-										{g.name}
-									</span>
-								))}
-							</div>
-						</div>
 					</div>
 
-					{/* BLOCS SAISONS ET ÉPISODES POUR SÉRIES ET ANIMES */}
 					{isSeriesOrAnime && (
 						<div className="w-full lg:w-80 flex flex-col gap-6">
 							<div className="bg-zinc-900 border border-red-900/30 p-4 rounded-sm">
@@ -309,6 +288,23 @@ export default async function UniversalWatchPage({ params, searchParams }) {
 							</div>
 						</div>
 					)}
+				</div>
+
+				{/* DESCRIPTION DÉPLACÉE ICI POUR ÊTRE TOUT EN BAS SUR MOBILE */}
+				<div className="mt-8 bg-zinc-900/50 border border-white/5 p-6 rounded-sm">
+					<p className="text-gray-400 leading-relaxed font-medium text-sm md:text-base">
+						{data.overview || t.no_summary}
+					</p>
+					<div className="mt-4 flex flex-wrap gap-2">
+						{data.genres?.map((g) => (
+							<span
+								key={g.id}
+								className="bg-black border border-zinc-800 text-zinc-500 px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-sm"
+							>
+								{g.name}
+							</span>
+						))}
+					</div>
 				</div>
 			</div>
 		</main>

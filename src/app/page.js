@@ -118,8 +118,12 @@ async function getData(
 			item.media_type !== "person",
 	);
 
+	const uniqueResults = Array.from(
+		new Map(filtered.map((item) => [item.id, item])).values(),
+	);
+
 	return {
-		results: filtered,
+		results: uniqueResults,
 		total_pages: Math.ceil((data1.total_results || 0) / 18),
 	};
 }
@@ -256,7 +260,7 @@ export default async function Home({ searchParams }) {
 
 	return (
 		<main className="min-h-screen bg-black text-white selection:bg-red-600 pb-32 md:pb-20 overflow-x-hidden">
-			{/* HEADER DESKTOP (Ton style de base conservé) */}
+			{/* HEADER DESKTOP */}
 			<header className="fixed top-0 w-full z-50 bg-black/80 backdrop-blur-md border-b border-red-900/50 hidden md:block">
 				<div className="px-6 md:px-12 py-4 flex justify-between items-center gap-4">
 					<Link href={`/?lang=${lang}`}>
@@ -347,7 +351,7 @@ export default async function Home({ searchParams }) {
 				</div>
 			</header>
 
-			{/* HEADER MOBILE (Style Compact Netflix/Prime) */}
+			{/* HEADER MOBILE */}
 			<header className="md:hidden fixed top-0 w-full z-50 bg-gradient-to-b from-black via-black/80 to-transparent transition-all duration-300">
 				<div className="px-4 py-3 flex justify-between items-center">
 					<Link href={`/?lang=${lang}`}>
@@ -356,6 +360,15 @@ export default async function Home({ searchParams }) {
 						</h1>
 					</Link>
 					<div className="flex items-center gap-3">
+						{/* BOUTON LANGUE MOBILE */}
+						<div className="flex bg-zinc-900/80 border border-white/10 rounded-sm p-0.5 text-[8px] font-bold">
+							<Link
+								href={`/?lang=${lang === "fr" ? "en" : "fr"}&type=${currentType}${query ? `&q=${query}` : ""}`}
+								className="px-2 py-1 bg-red-600 text-white rounded-sm uppercase"
+							>
+								{lang === "fr" ? "EN" : "FR"}
+							</Link>
+						</div>
 						<SignedIn>
 							<UserButton afterSignOutUrl="/" />
 						</SignedIn>
@@ -382,7 +395,7 @@ export default async function Home({ searchParams }) {
 				</div>
 			</header>
 
-			{/* HERO (Adapté Portrait sur Mobile) */}
+			{/* HERO */}
 			{!query && heroItem && (
 				<section className="relative w-full h-[70vh] md:h-[85vh] flex items-end pb-12 md:pb-20 px-6 md:px-12">
 					<div className="absolute inset-0">
@@ -451,7 +464,7 @@ export default async function Home({ searchParams }) {
 				))}
 			</div>
 
-			{/* BOTTOM NAV MOBILE (SVG blancs sobres) */}
+			{/* BOTTOM NAV MOBILE */}
 			<nav className="md:hidden fixed bottom-0 w-full z-50 bg-black/95 backdrop-blur-lg border-t border-white/10 px-6 py-3 flex justify-between items-center pb-8">
 				{[
 					{
@@ -546,7 +559,6 @@ const PosterCard = ({ item, currentType, lang, isGrid }) => {
 	const watchUrl = item.progress
 		? `/watch/${item.id}?type=${item.media_type}&lang=${lang}&s=${item.progress.split(" ")[0].replace("S", "")}&e=${item.progress.split(" ")[1].replace("E", "")}`
 		: `/watch/${item.id}?type=${item.media_type || (currentType === "anime" ? "anime" : currentType)}&lang=${lang}`;
-
 	return (
 		<Link
 			href={watchUrl}
