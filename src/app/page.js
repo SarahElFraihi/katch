@@ -28,13 +28,20 @@ const GENRES = {
 		{ id: 16, name: "Animation" },
 		{ id: 35, name: "Comédie" },
 		{ id: 80, name: "Crime" },
+		{ id: 99, name: "Documentaire" },
 		{ id: 18, name: "Drame" },
+		{ id: 10751, name: "Famille" },
 		{ id: 14, name: "Fantastique" },
+		{ id: 36, name: "Histoire" },
 		{ id: 27, name: "Horreur" },
+		{ id: 10402, name: "Musique" },
 		{ id: 9648, name: "Mystère" },
 		{ id: 10749, name: "Romance" },
 		{ id: 878, name: "Science-Fiction" },
 		{ id: 53, name: "Thriller" },
+		{ id: 10752, name: "Guerre" },
+		{ id: 37, name: "Western" },
+		{ id: "zombie", name: "Zombies" },
 	],
 	tv: [
 		{ id: 10759, name: "Action & Aventure" },
@@ -43,8 +50,12 @@ const GENRES = {
 		{ id: 80, name: "Crime" },
 		{ id: 99, name: "Documentaire" },
 		{ id: 18, name: "Drame" },
+		{ id: 10751, name: "Famille" },
+		{ id: 10762, name: "Kids" },
 		{ id: 9648, name: "Mystère" },
+		{ id: 10764, name: "Téléréalité" },
 		{ id: 10765, name: "Sci-Fi & Fantastique" },
+		{ id: "zombie", name: "Zombies" },
 	],
 	anime: [
 		{ id: 10759, name: "Action" },
@@ -53,6 +64,16 @@ const GENRES = {
 		{ id: 10765, name: "Fantaisie" },
 		{ id: 9648, name: "Mystère" },
 		{ id: 10751, name: "Famille" },
+		{ id: "zombie", name: "Zombies" },
+	],
+	kdrama: [
+		{ id: 18, name: "Drame" },
+		{ id: 35, name: "Comédie" },
+		{ id: 10749, name: "Romance" },
+		{ id: 10759, name: "Action & Aventure" },
+		{ id: 9648, name: "Mystère" },
+		{ id: 10765, name: "Sci-Fi & Fantaisie" },
+		{ id: "zombie", name: "Zombies" },
 	],
 };
 
@@ -62,15 +83,30 @@ async function getData(type = "all", genreId = "", page = 1) {
 
 	const getUrl = (p) => {
 		if (genreId) {
-			const baseType = type === "anime" ? "tv" : type;
-			const animeFilter =
-				type === "anime" ? "&with_original_language=ja&with_genres=16" : "";
-			return `https://api.themoviedb.org/3/discover/${baseType}?api_key=${apiKey}&language=fr-FR&with_genres=${genreId}${animeFilter}&sort_by=popularity.desc&page=${p}`;
+			const baseType = type === "anime" || type === "kdrama" ? "tv" : type;
+
+			// Filtres de langues spécifiques (Japonais pour Anime, Coréen pour KDrama)
+			let langFilter = "";
+			if (type === "anime")
+				langFilter = "&with_original_language=ja&with_genres=16";
+			if (type === "kdrama") langFilter = "&with_original_language=ko";
+
+			// Hack pour la catégorie "Zombies" avec les bons IDs TMDB
+			let filterParam = `&with_genres=${genreId}`;
+			if (genreId === "zombie") {
+				filterParam = `&with_keywords=12377|9759|14582`;
+			}
+
+			return `https://api.themoviedb.org/3/discover/${baseType}?api_key=${apiKey}&language=fr-FR${filterParam}${langFilter}&sort_by=popularity.desc&page=${p}`;
 		}
+
 		if (type === "anime")
 			return `https://api.themoviedb.org/3/discover/tv?api_key=${apiKey}&language=fr-FR&with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${p}`;
+		if (type === "kdrama")
+			return `https://api.themoviedb.org/3/discover/tv?api_key=${apiKey}&language=fr-FR&with_original_language=ko&sort_by=popularity.desc&page=${p}`;
 		if (type === "all")
 			return `https://api.themoviedb.org/3/trending/all/week?api_key=${apiKey}&language=fr-FR&page=${p}`;
+
 		return `https://api.themoviedb.org/3/trending/${type}/week?api_key=${apiKey}&language=fr-FR&page=${p}`;
 	};
 
@@ -100,7 +136,8 @@ async function searchData(type, query, page = 1) {
 	const buildUrl = (lang, p) => {
 		let searchType = "multi";
 		if (type === "movie") searchType = "movie";
-		if (type === "tv" || type === "anime") searchType = "tv";
+		if (type === "tv" || type === "anime" || type === "kdrama")
+			searchType = "tv";
 		return `https://api.themoviedb.org/3/search/${searchType}?api_key=${apiKey}&language=${lang}&query=${encodeURIComponent(query)}&page=${p}&include_adult=false`;
 	};
 
@@ -127,7 +164,7 @@ async function searchData(type, query, page = 1) {
 		...(enData2.results || []),
 	];
 
-	// Filtrer personnes et sans poster
+	// SÉCURITÉ : Filtrer strictement les personnes (acteurs, réals) et exiger un poster
 	const filtered = allResults.filter(
 		(item) => item.poster_path && item.media_type !== "person",
 	);
@@ -148,11 +185,16 @@ async function searchData(type, query, page = 1) {
 			return item.media_type === "movie" || !item.media_type;
 		if (type === "tv" || type === "anime")
 			return item.media_type === "tv" || !item.media_type;
+		if (type === "kdrama")
+			return (
+				(item.media_type === "tv" || !item.media_type) &&
+				item.original_language === "ko"
+			);
 		return true; // "all" → on garde tout
 	});
 
-	// ── Score de pertinence ──
-	const q = query.toLowerCase();
+	// ── Nouveau Score de pertinence (Boosté !) ──
+	const q = query.toLowerCase().trim();
 	const scored = typeFiltered.map((item) => {
 		const title = (item.title || item.name || "").toLowerCase();
 		const originalTitle = (
@@ -160,24 +202,22 @@ async function searchData(type, query, page = 1) {
 			item.original_name ||
 			""
 		).toLowerCase();
-		let score = 0;
 
-		// Correspondance exacte → très fort bonus
-		if (title === q || originalTitle === q) score += 100;
-		// Commence par la requête
-		else if (title.startsWith(q) || originalTitle.startsWith(q)) score += 60;
-		// Contient la requête
-		else if (title.includes(q) || originalTitle.includes(q)) score += 30;
+		// 1. La base du score EST la popularité brute de TMDB (plus de plafond !)
+		let score = item.popularity || 0;
 
-		// Popularité (normalisée)
-		score += Math.min((item.popularity || 0) / 10, 20);
+		// 2. Bonus de correspondance de texte ultra-forts
+		if (title === q || originalTitle === q)
+			score += 1000; // Correspondance exacte = Top direct
+		else if (title.startsWith(q) || originalTitle.startsWith(q)) score += 300;
+		else if (title.includes(q) || originalTitle.includes(q)) score += 100;
 
-		// Bonus si note élevée
-		if (item.vote_average >= 7) score += 10;
-		if (item.vote_count > 1000) score += 5;
+		// 3. Bonus "Gros Hit" : Les séries/films très connus ont beaucoup de votes
+		if (item.vote_count > 5000) score += 200;
+		else if (item.vote_count > 1000) score += 100;
 
-		// Malus si pas de backdrop
-		if (!item.backdrop_path) score -= 10;
+		// 4. Malus visuel si pas d'image de fond (on préfère les belles fiches)
+		if (!item.backdrop_path) score -= 150;
 
 		return { ...item, _score: score };
 	});
@@ -361,11 +401,15 @@ export default async function Home({ searchParams }) {
 					</Link>
 
 					<nav className="flex items-center gap-6 text-xs font-black uppercase italic tracking-widest">
-						{["all", "movie", "tv", "anime"].map((type) => (
+						{["all", "movie", "tv", "anime", "kdrama"].map((type) => (
 							<div key={type} className="group relative py-2">
+								{/* 1. On enlève le !genreId pour que ça reste rouge quand on est dans une catégorie */}
+								{/* On ajoute group-hover:text-red-500 pour l'effet visuel quand on survole le menu */}
 								<Link
 									href={`/?type=${type}`}
-									className={`${currentType === type && !genreId ? "text-red-600" : "text-gray-400"} hover:text-white transition-colors`}
+									className={`${
+										currentType === type ? "text-red-600" : "text-gray-400"
+									} hover:text-white group-hover:text-red-500 transition-colors`}
 								>
 									{type === "all"
 										? T.home
@@ -373,8 +417,12 @@ export default async function Home({ searchParams }) {
 											? T.movies
 											: type === "tv"
 												? T.series
-												: T.animes}
+												: type === "anime"
+													? T.animes
+													: "K-DRAMAS"}
 								</Link>
+
+								{/* 2. Ton menu déroulant conservé */}
 								{type !== "all" && (
 									<div className="absolute top-full left-1/2 -translate-x-1/2 pt-4 hidden group-hover:block w-[320px]">
 										<div className="bg-zinc-900 border border-red-900/50 rounded-sm shadow-2xl p-3 grid grid-cols-2 gap-2">
@@ -382,7 +430,11 @@ export default async function Home({ searchParams }) {
 												<Link
 													key={g.id}
 													href={`/?type=${type}&genre=${g.id}`}
-													className="px-3 py-2 bg-black hover:bg-red-600 hover:text-white transition-colors text-[10px] rounded-sm truncate"
+													className={`px-3 py-2 text-[10px] rounded-sm truncate transition-colors ${
+														genreId === g.id.toString() || genreId === g.id
+															? "bg-red-600 text-white" // Si on est sur ce genre, on le met en rouge dans le menu
+															: "bg-black hover:bg-red-600 hover:text-white text-gray-300"
+													}`}
 												>
 													{g.name}
 												</Link>
@@ -395,18 +447,14 @@ export default async function Home({ searchParams }) {
 					</nav>
 
 					<div className="flex items-center gap-4">
-						<form action="/" method="GET" className="relative w-56">
-							<input
-								type="hidden"
-								name="type"
-								value={currentType === "all" ? "movie" : currentType}
-							/>
+						<form action="/" method="GET" className="relative w-full">
+							<input type="hidden" name="type" value={currentType} />
 							<input
 								type="text"
 								name="q"
 								placeholder={T.search}
 								defaultValue={query}
-								className="w-full bg-zinc-900 border border-red-900/30 rounded-sm px-4 py-2 text-xs font-bold focus:outline-none focus:border-red-600 uppercase italic"
+								className="w-full bg-zinc-900 border border-red-900/30 rounded-sm px-4 py-2 text-[10px] md:text-xs font-bold focus:outline-none focus:border-red-600 uppercase italic"
 							/>
 						</form>
 						<SignedOut>
@@ -445,18 +493,14 @@ export default async function Home({ searchParams }) {
 					</div>
 				</div>
 				<div className="px-4 pb-2">
-					<form action="/" method="GET">
-						<input
-							type="hidden"
-							name="type"
-							value={currentType === "all" ? "movie" : currentType}
-						/>
+					<form action="/" method="GET" className="relative w-full">
+						<input type="hidden" name="type" value={currentType} />
 						<input
 							type="text"
 							name="q"
 							placeholder={T.search}
 							defaultValue={query}
-							className="w-full bg-zinc-900/80 border border-white/5 rounded-sm px-4 py-2 text-[10px] font-bold uppercase italic focus:border-red-600 outline-none"
+							className="w-full bg-zinc-900 border border-red-900/30 rounded-sm px-4 py-2 text-[10px] md:text-xs font-bold focus:outline-none focus:border-red-600 uppercase italic"
 						/>
 					</form>
 				</div>
@@ -497,6 +541,70 @@ export default async function Home({ searchParams }) {
 			<div
 				className={`${!query && heroItem ? "-mt-10" : "pt-32"} relative z-20 flex flex-col gap-10`}
 			>
+				{/* ── BARRE DE FILTRES DE RECHERCHE (Affichée uniquement si on cherche un truc) ── */}
+				{query && (
+					<section className="px-4 md:px-12 pt-10 md:pt-4">
+						<div className="flex flex-wrap gap-2 md:gap-3 pb-4 items-center border-b border-red-900/30 mb-4">
+							<span className="text-[10px] md:text-xs font-black uppercase italic text-red-600 mr-2">
+								Filtrer :
+							</span>
+							{[
+								{ id: "all", label: "Tout" },
+								{ id: "movie", label: "Films" },
+								{ id: "tv", label: "Séries" },
+								{ id: "anime", label: "Animes" },
+								{ id: "kdrama", label: "K-Dramas" },
+							].map((filter) => (
+								<Link
+									key={filter.id}
+									href={`/?q=${encodeURIComponent(query)}&type=${filter.id}`}
+									className={`px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-black uppercase italic rounded-sm transition-all border ${
+										currentType === filter.id
+											? "bg-red-600 border-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]"
+											: "bg-black/50 border-white/10 text-zinc-400 hover:text-white hover:border-white/30 hover:bg-white/10"
+									}`}
+								>
+									{filter.label}
+								</Link>
+							))}
+						</div>
+					</section>
+				)}
+
+				{/* ── BARRE DE CATÉGORIES (Wrap au lieu du Scroll) ── */}
+				{currentType !== "all" && !query && (
+					<section className="px-4 md:px-12 pt-10 md:pt-4">
+						<div className="flex flex-wrap gap-2 md:gap-3 pb-4 items-center">
+							{/* Bouton "Tout voir" */}
+							<Link
+								href={`/?type=${currentType}`}
+								className={`px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-black uppercase italic rounded-sm transition-all border ${
+									!genreId
+										? "bg-red-600 border-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]"
+										: "bg-black/50 border-white/10 text-zinc-400 hover:text-white hover:border-white/30 hover:bg-white/10"
+								}`}
+							>
+								Tout voir
+							</Link>
+
+							{/* Boucle sur les genres */}
+							{GENRES[currentType].map((g) => (
+								<Link
+									key={g.id}
+									href={`/?type=${currentType}&genre=${g.id}`}
+									className={`px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-black uppercase italic rounded-sm transition-all border ${
+										genreId === g.id.toString() || genreId === g.id
+											? "bg-red-600 border-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]"
+											: "bg-black/50 border-white/10 text-zinc-400 hover:text-white hover:border-white/30 hover:bg-white/10"
+									}`}
+								>
+									{g.name}
+								</Link>
+							))}
+						</div>
+					</section>
+				)}
+
 				{sections.map((sec, idx) => (
 					<section key={idx} className="px-4 md:px-12">
 						<h3 className="text-lg md:text-2xl font-black uppercase italic mb-4 flex items-center gap-2">
@@ -560,90 +668,28 @@ export default async function Home({ searchParams }) {
 			</div>
 
 			{/* ── BOTTOM NAV MOBILE ── */}
-			<nav className="md:hidden fixed bottom-0 w-full z-50 bg-black/95 backdrop-blur-lg border-t border-white/10 px-6 py-3 flex justify-between items-center pb-8">
-				{[
-					{
-						label: T.home,
-						type: "all",
-						icon: (
-							<svg
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="white"
-								strokeWidth="2"
-								className="w-5 h-5"
-							>
-								<path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-								<path d="M9 22V12h6v10" />
-							</svg>
-						),
-					},
-					{
-						label: T.movies,
-						type: "movie",
-						icon: (
-							<svg
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="white"
-								strokeWidth="2"
-								className="w-5 h-5"
-							>
-								<rect x="2" y="2" width="20" height="20" rx="2" />
-								<path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5" />
-							</svg>
-						),
-					},
-					{
-						label: T.series,
-						type: "tv",
-						icon: (
-							<svg
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="white"
-								strokeWidth="2"
-								className="w-5 h-5"
-							>
-								<rect x="2" y="7" width="20" height="15" rx="2" />
-								<path d="M17 2l-5 5-5-5" />
-							</svg>
-						),
-					},
-					{
-						label: T.animes,
-						type: "anime",
-						icon: (
-							<svg
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="white"
-								strokeWidth="2"
-								className="w-5 h-5"
-							>
-								<path d="M12 2l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-6z" />
-							</svg>
-						),
-					},
-				].map((nav) => (
-					<Link
-						key={nav.type}
-						href={`/?type=${nav.type}`}
-						className={`flex flex-col items-center gap-1 ${currentType === nav.type ? "opacity-100 scale-110" : "opacity-50"}`}
-					>
-						<div
-							className={
-								currentType === nav.type ? "text-red-600" : "text-white"
-							}
+			<nav className="md:hidden fixed bottom-0 w-full z-50 bg-black/90 backdrop-blur-md border-t border-red-900/50 flex justify-around items-center py-4 text-[10px] sm:text-xs font-black uppercase italic tracking-widest">
+				{["all", "movie", "tv", "anime", "kdrama"].map((type) => (
+					<div key={type} className="group relative py-2">
+						<Link
+							href={`/?type=${type}`}
+							className={`${
+								currentType === type
+									? "text-red-600 drop-shadow-[0_0_8px_rgba(220,38,38,0.8)] scale-105"
+									: "text-gray-400"
+							} inline-block hover:text-white hover:scale-110 transition-all duration-300`}
 						>
-							{nav.icon}
-						</div>
-						<span
-							className={`text-[8px] font-black uppercase italic tracking-tighter ${currentType === nav.type ? "text-red-600" : "text-white"}`}
-						>
-							{nav.label}
-						</span>
-					</Link>
+							{type === "all"
+								? T.home
+								: type === "movie"
+									? T.movies
+									: type === "tv"
+										? T.series
+										: type === "anime"
+											? T.animes
+											: "K-DRAMAS"}
+						</Link>
+					</div>
 				))}
 			</nav>
 		</main>
