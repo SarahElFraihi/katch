@@ -107,8 +107,14 @@ export default async function WatchPage({ params, searchParams }) {
 		3: {
 			name: "VO 3",
 			url: isSeriesOrAnime
-				? `https://vidsrc.xyz/embed/tv/${tmdb}/${currentSeason}/${currentEpisode}`
-				: `https://vidsrc.xyz/embed/movie/${tmdb}`,
+				? `https://vidsrc.cc/v2/embed/tv/${tmdb}/${currentSeason}/${currentEpisode}`
+				: `https://vidsrc.cc/v2/embed/movie/${tmdb}`,
+		},
+		4: {
+			name: "VO 4",
+			url: isSeriesOrAnime
+				? `https://vidlink.pro/tv/${tmdb}/${currentSeason}/${currentEpisode}?primaryColor=dc2626`
+				: `https://vidlink.pro/movie/${tmdb}?primaryColor=dc2626`,
 		},
 	};
 
