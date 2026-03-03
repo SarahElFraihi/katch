@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import SecurityShield from "@/components/SecurityShield";
 import InstallPrompt from "@/components/InstallPrompt";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = Geist({
 	variable: "--font-geist-sans",
@@ -52,6 +53,7 @@ export default function RootLayout({ children }) {
 					<SecurityShield />
 					<InstallPrompt />
 					{children}
+					<Analytics />
 				</body>
 			</html>
 		</ClerkProvider>
