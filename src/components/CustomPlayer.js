@@ -39,12 +39,13 @@ export default function CustomPlayer({ videoUrl, title }) {
 	return (
 		<div className="relative w-full aspect-video bg-black rounded-t-lg shadow-[0_0_30px_rgba(220,38,38,0.15)] overflow-hidden border border-white/5 border-b-0">
 			{/* Plyr permet de changer sa couleur principale avec une simple variable CSS ! */}
+			<InstallPrompt /> {/* Pour installer KATCH comme une app */}
+			<SecurityShield /> {/* Bloque les popups des serveurs VF */}
 			<style jsx global>{`
 				:root {
 					--plyr-color-main: #dc2626; /* Rouge KATCH */
 				}
 			`}</style>
-
 			{/* La balise vidéo HTML standard, transformée par Plyr en lecteur magnifique */}
 			<video ref={videoRef} controls crossOrigin="anonymous" playsInline>
 				<source src={videoUrl} type="video/mp4" />

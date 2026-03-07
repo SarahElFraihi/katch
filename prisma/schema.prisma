@@ -1,0 +1,20 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model lulu_links {
+  id         String   @id @default(cuid())
+  tmdb_id    String
+  type       String   
+  season     Int?     
+  episode    Int?     
+  file_code  String   
+  updated_at DateTime @updatedAt
+
+  @@unique([tmdb_id, season, episode])
+}

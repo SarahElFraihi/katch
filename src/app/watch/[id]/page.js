@@ -2,6 +2,9 @@ import Link from "next/link";
 import WatchActions from "@/components/WatchActions";
 import { checkWatchlist } from "@/lib/actions";
 
+import InstallPrompt from "@/components/InstallPrompt";
+import SecurityShield from "@/components/SecurityShield";
+
 async function getDetails(id, type) {
 	const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
 	const endpoint = type === "movie" ? "movie" : "tv";
@@ -39,9 +42,7 @@ export default async function WatchPage({ params, searchParams }) {
 	const type = sp?.type || "movie";
 	const currentSeason = parseInt(sp?.s) || 1;
 	const currentEpisode = parseInt(sp?.e) || 1;
-	// "vf" ou "vo" — VF par défaut
 	const currentLang = sp?.lang === "vo" ? "vo" : "vf";
-	// clé de source dans la langue choisie
 	const currentServerKey = sp?.server || "1";
 
 	const [data, imdbId] = await Promise.all([
@@ -68,47 +69,35 @@ export default async function WatchPage({ params, searchParams }) {
 	const tmdb = id;
 	const imdb = imdbId;
 
-	// ─── SOURCES VF ────────────────────────────────────────────────────────────
+	// ─── SOURCES VF (1 seule source ultra simple pour le frère) ─────────────────────────
 	const serversVF = {
 		1: {
-			name: "VF 1",
+			name: "LECTEUR VF",
 			url: isSeriesOrAnime
-				? `https://autoembed.cc/tv/tmdb/${tmdb}-${currentSeason}-${currentEpisode}`
-				: `https://autoembed.cc/movie/tmdb/${tmdb}`,
-		},
-		2: {
-			name: "VF 2",
-			url: isSeriesOrAnime
-				? `https://embed.su/embed/tv/${tmdb}/${currentSeason}/${currentEpisode}`
-				: `https://embed.su/embed/movie/${tmdb}`,
-		},
-		3: {
-			name: "VF 3",
-			url: isSeriesOrAnime
-				? `https://www.2embed.stream/embed/tv/${imdb || tmdb}/${currentSeason}/${currentEpisode}`
-				: `https://www.2embed.stream/embed/movie/${imdb || tmdb}`,
+				? `https://frembed.work/api/serie.php?id=${tmdb}&sa=${currentSeason}&epi=${currentEpisode}`
+				: `https://frembed.work/api/film.php?id=${tmdb}`,
 		},
 	};
 
-	// ─── SOURCES VO (anglais / version originale) ──────────────────────────────
+	// ─── SOURCES VO (Tes anciennes sources originales réintégrées) ───────────────
 	const serversVO = {
 		1: {
 			name: "VO 1",
 			url: isSeriesOrAnime
-				? `https://vidsrc.to/embed/tv/${tmdb}/${currentSeason}/${currentEpisode}`
-				: `https://vidsrc.to/embed/movie/${tmdb}`,
+				? `https://vidlink.pro/tv/${tmdb}/${currentSeason}/${currentEpisode}`
+				: `https://vidlink.pro/movie/${tmdb}`,
 		},
 		2: {
 			name: "VO 2",
 			url: isSeriesOrAnime
-				? `https://vidlink.pro/tv/${tmdb}/${currentSeason}/${currentEpisode}`
-				: `https://vidlink.pro/movie/${tmdb}`,
+				? `https://vidsrc.cc/v2/embed/tv/${tmdb}/${currentSeason}/${currentEpisode}`
+				: `https://vidsrc.cc/v2/embed/movie/${tmdb}`,
 		},
 		3: {
 			name: "VO 3",
 			url: isSeriesOrAnime
-				? `https://vidsrc.cc/v2/embed/tv/${tmdb}/${currentSeason}/${currentEpisode}`
-				: `https://vidsrc.cc/v2/embed/movie/${tmdb}`,
+				? `https://vidsrc.to/embed/tv/${tmdb}/${currentSeason}/${currentEpisode}`
+				: `https://vidsrc.to/embed/movie/${tmdb}`,
 		},
 		4: {
 			name: "VO 4",
@@ -139,7 +128,6 @@ export default async function WatchPage({ params, searchParams }) {
 		episode: currentEpisode,
 	};
 
-	// Helper pour construire les liens en gardant tous les params
 	const watchLink = (overrides = {}) => {
 		const p = {
 			type,
@@ -154,6 +142,9 @@ export default async function WatchPage({ params, searchParams }) {
 
 	return (
 		<main className="min-h-screen bg-black text-white selection:bg-red-600 pb-20">
+			<InstallPrompt />
+			<SecurityShield />
+
 			{/* Header */}
 			<header className="w-full p-6 flex justify-between items-center border-b border-red-900/50 bg-black">
 				<Link
@@ -199,7 +190,7 @@ export default async function WatchPage({ params, searchParams }) {
 								className="absolute inset-0 w-full h-full rounded-sm"
 								allowFullScreen
 								allow="autoplay; fullscreen; picture-in-picture"
-								referrerPolicy="origin"
+								referrerPolicy="no-referrer"
 							/>
 						</div>
 
@@ -211,7 +202,6 @@ export default async function WatchPage({ params, searchParams }) {
 								<span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 italic mr-3">
 									LANGUE
 								</span>
-								{/* Bouton VF */}
 								<Link
 									href={watchLink({ lang: "vf", server: "1" })}
 									scroll={false}
@@ -219,14 +209,13 @@ export default async function WatchPage({ params, searchParams }) {
 									<button
 										className={`px-4 py-2 text-[10px] font-black uppercase rounded-sm transition-all border-b-2 ${
 											currentLang === "vf"
-												? "bg-red-600 text-white border-red-900"
+												? "bg-red-600 text-white border-red-900 shadow-md shadow-red-900/50"
 												: "bg-black text-zinc-500 border-transparent hover:text-white hover:bg-zinc-800"
 										}`}
 									>
-										🇫🇷 VF
+										VF
 									</button>
 								</Link>
-								{/* Bouton VO */}
 								<Link
 									href={watchLink({ lang: "vo", server: "1" })}
 									scroll={false}
@@ -234,39 +223,41 @@ export default async function WatchPage({ params, searchParams }) {
 									<button
 										className={`px-4 py-2 text-[10px] font-black uppercase rounded-sm transition-all border-b-2 ${
 											currentLang === "vo"
-												? "bg-red-600 text-white border-red-900"
+												? "bg-red-600 text-white border-red-900 shadow-md shadow-red-900/50"
 												: "bg-black text-zinc-500 border-transparent hover:text-white hover:bg-zinc-800"
 										}`}
 									>
-										🇬🇧 VO
+										VO
 									</button>
 								</Link>
 							</div>
 
-							{/* Ligne 2 : sélecteur de source */}
-							<div className="flex items-center gap-2">
-								<span className="text-red-600 font-black text-xs">///</span>
-								<span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 italic mr-3">
-									SOURCE
-								</span>
-								{Object.entries(servers).map(([key, server]) => (
-									<Link
-										key={key}
-										href={watchLink({ server: key })}
-										scroll={false}
-									>
-										<button
-											className={`px-4 py-2 text-[10px] font-black uppercase rounded-sm transition-all border-b-2 ${
-												currentServerKey === key
-													? "bg-zinc-700 text-white border-zinc-900"
-													: "bg-black text-zinc-500 border-transparent hover:text-white hover:bg-zinc-800"
-											}`}
+							{/* Ligne 2 : sélecteur de source (apparaît uniquement s'il y a plus d'une source) */}
+							{Object.keys(servers).length > 1 && (
+								<div className="flex items-center gap-2 flex-wrap mt-1">
+									<span className="text-red-600 font-black text-xs">///</span>
+									<span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 italic mr-3">
+										SOURCE
+									</span>
+									{Object.entries(servers).map(([key, server]) => (
+										<Link
+											key={key}
+											href={watchLink({ server: key })}
+											scroll={false}
 										>
-											{server.name}
-										</button>
-									</Link>
-								))}
-							</div>
+											<button
+												className={`px-4 py-2 text-[10px] font-black uppercase rounded-sm transition-all border-b-2 ${
+													currentServerKey === key
+														? "bg-zinc-700 text-white border-zinc-900"
+														: "bg-black text-zinc-500 border-transparent hover:text-white hover:bg-zinc-800"
+												}`}
+											>
+												{server.name}
+											</button>
+										</Link>
+									))}
+								</div>
+							)}
 						</div>
 
 						{/* Navigation épisodes */}
@@ -289,7 +280,7 @@ export default async function WatchPage({ params, searchParams }) {
 										href={watchLink({ e: currentEpisode + 1 })}
 										scroll={false}
 									>
-										<button className="px-6 py-3 text-[10px] font-black bg-red-600 text-white border-b-2 border-red-900 rounded-sm hover:scale-105 uppercase italic transition-all">
+										<button className="px-6 py-3 text-[10px] font-black bg-red-600 text-white border-b-2 border-red-900 rounded-sm hover:scale-105 uppercase italic transition-all shadow-lg shadow-red-900/50">
 											SUIV. →
 										</button>
 									</Link>
