@@ -183,7 +183,7 @@ export default async function WatchPage({ params, searchParams }) {
 				<div className="flex flex-col lg:flex-row gap-8">
 					<div className="flex-1">
 						{/* Player */}
-						<div className="relative w-full aspect-video bg-zinc-900 border border-red-900/30 rounded-sm shadow-[0_0_30px_rgba(220,38,38,0.1)]">
+						<div className="player-container relative w-full aspect-video bg-zinc-900 border border-red-900/30 rounded-sm shadow-[0_0_30px_rgba(220,38,38,0.1)]">
 							<iframe
 								key={videoUrl}
 								src={videoUrl}
