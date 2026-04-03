@@ -57,12 +57,12 @@ export default function PlayerWrapper({ videoUrl }) {
 				referrerPolicy="origin"
 			/>
 
-			{/* Bouton de forçage qui apparaît au survol de la vidéo */}
+			{/* Bouton de forçage (Toujours visible sur mobile, au survol sur PC) */}
 			<button
 				onClick={handleFullscreen}
-				className="absolute top-2 right-2 z-50 bg-black/80 text-white px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-sm border border-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 hover:text-white"
+				className="absolute top-2 right-2 z-50 bg-black/80 text-white px-2 py-2 md:px-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest rounded-sm border border-red-600 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity active:bg-red-600 md:hover:bg-red-600 md:hover:text-white shadow-lg shadow-black/50"
 			>
-				{isFullscreen ? "Quitter le plein écran" : "[ ] Forcer Plein Écran"}
+				{isFullscreen ? "Quitter" : "[ ] Plein Écran"}
 			</button>
 		</div>
 	);
