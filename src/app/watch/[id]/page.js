@@ -1,7 +1,7 @@
 import Link from "next/link";
 import WatchActions from "@/components/WatchActions";
 import { checkWatchlist } from "@/lib/actions";
-
+import PlayerWrapper from "@/components/PlayerWrapper";
 import InstallPrompt from "@/components/InstallPrompt";
 import SecurityShield from "@/components/SecurityShield";
 
@@ -69,7 +69,7 @@ export default async function WatchPage({ params, searchParams }) {
 	const tmdb = id;
 	const imdb = imdbId;
 
-	// ─── SOURCES VF (1 seule source ultra simple pour le frère) ─────────────────────────
+	// ─── SOURCES VF ────────────────
 	const serversVF = {
 		1: {
 			name: "LECTEUR VF",
@@ -79,7 +79,7 @@ export default async function WatchPage({ params, searchParams }) {
 		},
 	};
 
-	// ─── SOURCES VO (Tes anciennes sources originales réintégrées) ───────────────
+	// ─── SOURCES VO ───────────────
 	const serversVO = {
 		1: {
 			name: "VO 1",
@@ -183,16 +183,7 @@ export default async function WatchPage({ params, searchParams }) {
 				<div className="flex flex-col lg:flex-row gap-8">
 					<div className="flex-1">
 						{/* Player */}
-						<div className="player-container relative w-full aspect-video bg-zinc-900 border border-red-900/30 rounded-sm shadow-[0_0_30px_rgba(220,38,38,0.1)]">
-							<iframe
-								key={videoUrl}
-								src={videoUrl}
-								className="absolute inset-0 w-full h-full rounded-sm"
-								allowFullScreen
-								allow="autoplay; fullscreen; picture-in-picture"
-								referrerPolicy="no-referrer"
-							/>
-						</div>
+						<PlayerWrapper videoUrl={videoUrl} />
 
 						{/* Barre VF / VO + sources */}
 						<div className="bg-zinc-900 border-x border-b border-red-900/30 rounded-b-sm p-3 flex flex-col gap-3">
