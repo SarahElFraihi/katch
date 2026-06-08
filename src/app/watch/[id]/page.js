@@ -35,6 +35,30 @@ async function getSeasonDetails(id, seasonNumber) {
 	return res.json();
 }
 
+export async function generateMetadata({ params, searchParams }) {
+	const { id } = await params;
+	const sp = await searchParams;
+	const type = sp?.type || "movie";
+
+	// On réutilise ta fonction existante pour chercher le nom du film/série
+	const data = await getDetails(id, type);
+
+	if (!data) {
+		return {
+			title: "Introuvable - KATCH",
+		};
+	}
+
+	// data.title c'est pour les films, data.name c'est pour les séries
+	const title = data.title || data.name;
+
+	return {
+		title: `${title} - KATCH`,
+		description:
+			data.overview || `Regarder ${title} en streaming gratuit sur KATCH.`,
+	};
+}
+
 export default async function WatchPage({ params, searchParams }) {
 	const { id } = await params;
 	const sp = await searchParams;
