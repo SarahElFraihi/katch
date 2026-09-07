@@ -853,13 +853,13 @@ export default async function Home({ searchParams }) {
 						href="/watchlist"
 						className="text-zinc-400 hover:text-white hover:text-red-500 transition-colors border-l border-zinc-800 pl-4"
 					>
-						MA LISTE
+						LISTE
 					</Link>
 					<Link
 						href="/history"
 						className="text-zinc-400 hover:text-white hover:text-red-500 transition-colors"
 					>
-						HISTORIQUE
+						VU
 					</Link>
 				</SignedIn>
 			</nav>
