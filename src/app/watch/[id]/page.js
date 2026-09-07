@@ -35,12 +35,23 @@ async function getSeasonDetails(id, seasonNumber) {
 	return res.json();
 }
 
+// ─── RÉCUPÉRATION DES TITRES SIMILAIRES (TMDB) ───────────────────────────────
+async function getSimilarMedia(id, type) {
+	const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+	const endpoint = type === "movie" ? "movie" : "tv";
+	const res = await fetch(
+		`https://api.themoviedb.org/3/${endpoint}/${id}/recommendations?language=fr-FR&api_key=${apiKey}`,
+	);
+	if (!res.ok) return [];
+	const json = await res.json();
+	return (json.results || []).filter((item) => item.poster_path);
+}
+
 export async function generateMetadata({ params, searchParams }) {
 	const { id } = await params;
 	const sp = await searchParams;
 	const type = sp?.type || "movie";
 
-	// On réutilise ta fonction existante pour chercher le nom du film/série
 	const data = await getDetails(id, type);
 
 	if (!data) {
@@ -49,7 +60,6 @@ export async function generateMetadata({ params, searchParams }) {
 		};
 	}
 
-	// data.title c'est pour les films, data.name c'est pour les séries
 	const title = data.title || data.name;
 
 	return {
@@ -69,9 +79,10 @@ export default async function WatchPage({ params, searchParams }) {
 	const currentLang = sp?.lang === "vo" ? "vo" : "vf";
 	const currentServerKey = sp?.server || "1";
 
-	const [data, imdbId] = await Promise.all([
+	const [data, imdbId, similarList] = await Promise.all([
 		getDetails(id, type),
 		getImdbId(id, type),
+		getSimilarMedia(id, type),
 	]);
 
 	if (!data)
@@ -247,7 +258,7 @@ export default async function WatchPage({ params, searchParams }) {
 								</Link>
 							</div>
 
-							{/* Ligne 2 : sélecteur de source (apparaît uniquement s'il y a plus d'une source) */}
+							{/* Ligne 2 : sélecteur de source */}
 							{Object.keys(servers).length > 1 && (
 								<div className="flex items-center gap-2 flex-wrap mt-1">
 									<span className="text-red-600 font-black text-xs">///</span>
@@ -389,6 +400,35 @@ export default async function WatchPage({ params, searchParams }) {
 						))}
 					</div>
 				</div>
+
+				{/* ─── SECTION TITRES SIMILAIRES ─── */}
+				{similarList.length > 0 && (
+					<div className="mt-12">
+						<h3 className="text-lg md:text-xl font-black uppercase italic tracking-tighter text-white mb-4 flex items-center gap-2">
+							<span className="text-red-600">///</span> TITRES SIMILAIRES
+						</h3>
+						<div className="flex overflow-x-auto gap-3 md:gap-4 pb-4 custom-scrollbar">
+							{similarList.slice(0, 14).map((item) => (
+								<Link
+									key={item.id}
+									href={`/watch/${item.id}?type=${type}`}
+									className="flex-none w-[110px] md:w-[160px] group flex flex-col gap-2"
+								>
+									<div className="relative aspect-[2/3] overflow-hidden rounded-sm bg-zinc-900 border border-zinc-800 transition-all duration-300 group-hover:scale-105 group-hover:border-red-600">
+										<img
+											src={`https://image.tmdb.org/t/p/w500${item.poster_path}`}
+											alt={item.title || item.name || ""}
+											className="w-full h-full object-cover"
+										/>
+									</div>
+									<h4 className="font-bold text-[9px] md:text-xs uppercase text-zinc-400 group-hover:text-white truncate">
+										{item.title || item.name}
+									</h4>
+								</Link>
+							))}
+						</div>
+					</div>
+				)}
 			</div>
 		</main>
 	);
