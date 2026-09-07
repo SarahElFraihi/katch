@@ -104,41 +104,47 @@ export default async function WatchPage({ params, searchParams }) {
 	const tmdb = id;
 	const imdb = imdbId;
 
-	// ─── SOURCES VF ────────────────
+	// ─── SOURCES VF (100% Francophone) ────────────────
 	const serversVF = {
 		1: {
-			name: "LECTEUR VF",
+			name: "FREMBED",
 			url: isSeriesOrAnime
 				? `https://frembed.work/api/serie.php?id=${tmdb}&sa=${currentSeason}&epi=${currentEpisode}`
 				: `https://frembed.work/api/film.php?id=${tmdb}`,
+		},
+		2: {
+			name: "VIDZY",
+			url: isSeriesOrAnime
+				? `https://vidzy.org/serie/${tmdb}/${currentSeason}/${currentEpisode}/vf?color=dc2626&autonext=1`
+				: `https://vidzy.org/movie/${tmdb}/vf?color=dc2626`,
 		},
 	};
 
 	// ─── SOURCES VO ───────────────
 	const serversVO = {
 		1: {
-			name: "VO 1",
-			url: isSeriesOrAnime
-				? `https://vidlink.pro/tv/${tmdb}/${currentSeason}/${currentEpisode}`
-				: `https://vidlink.pro/movie/${tmdb}`,
-		},
-		2: {
-			name: "VO 2",
-			url: isSeriesOrAnime
-				? `https://vidsrc.cc/v2/embed/tv/${tmdb}/${currentSeason}/${currentEpisode}`
-				: `https://vidsrc.cc/v2/embed/movie/${tmdb}`,
-		},
-		3: {
-			name: "VO 3",
-			url: isSeriesOrAnime
-				? `https://vidsrc.to/embed/tv/${tmdb}/${currentSeason}/${currentEpisode}`
-				: `https://vidsrc.to/embed/movie/${tmdb}`,
-		},
-		4: {
-			name: "VO 4",
+			name: "VIDLINK",
 			url: isSeriesOrAnime
 				? `https://vidlink.pro/tv/${tmdb}/${currentSeason}/${currentEpisode}?primaryColor=dc2626`
 				: `https://vidlink.pro/movie/${tmdb}?primaryColor=dc2626`,
+		},
+		2: {
+			name: "FILMU",
+			url: isSeriesOrAnime
+				? `https://embed.filmu.in/embed/tv/${tmdb}/${currentSeason}/${currentEpisode}`
+				: `https://embed.filmu.in/embed/movie/${tmdb}`,
+		},
+		3: {
+			name: "VIDEASY",
+			url: isSeriesOrAnime
+				? `https://player.videasy.net/tv/${tmdb}/${currentSeason}/${currentEpisode}`
+				: `https://player.videasy.net/movie/${tmdb}`,
+		},
+		4: {
+			name: "VIDSRC TO",
+			url: isSeriesOrAnime
+				? `https://vidsrc.to/embed/tv/${tmdb}/${currentSeason}/${currentEpisode}`
+				: `https://vidsrc.to/embed/movie/${tmdb}`,
 		},
 	};
 
