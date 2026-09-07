@@ -101,13 +101,17 @@ async function getData(type = "all", genreParam = "", page = 1) {
 			const baseType = type === "anime" || type === "kdrama" ? "tv" : type;
 
 			let langFilter = "";
-			if (type === "anime")
-				langFilter = "&with_original_language=ja&with_genres=16";
+			if (type === "anime") langFilter = "&with_original_language=ja";
 			if (type === "kdrama") langFilter = "&with_original_language=ko";
 
 			const tags = genreParam.split(",").filter(Boolean);
-			let filterParam = "";
 
+			// Pour les animes, on force toujours le genre Animation (16) en plus des sous-genres demandés
+			if (type === "anime" && !tags.includes("16")) {
+				tags.push("16");
+			}
+
+			let filterParam = "";
 			if (tags.includes("zombie")) {
 				filterParam = `&with_keywords=12377|9759|14582`;
 			} else if (tags.length > 0) {
