@@ -16,14 +16,19 @@ export default async function HistoryPage({ searchParams }) {
 
 	const sp = await searchParams;
 	const currentFilter = sp?.type || "all";
+	const searchQuery = (sp?.q || "").trim().toLowerCase();
 
 	const allHistory = (await getUserHistory()) || [];
 
-	// Filtrage par type
-	const filteredHistory =
-		currentFilter === "all"
-			? allHistory
-			: allHistory.filter((item) => item.media_type === currentFilter);
+	// Filtrage par type + recherche par titre
+	const filteredHistory = allHistory.filter((item) => {
+		const matchesType =
+			currentFilter === "all" || item.media_type === currentFilter;
+		const matchesQuery =
+			searchQuery === "" ||
+			(item.title || "").toLowerCase().includes(searchQuery);
+		return matchesType && matchesQuery;
+	});
 
 	const tabs = [
 		{ id: "all", label: "TOUT" },
@@ -32,6 +37,14 @@ export default async function HistoryPage({ searchParams }) {
 		{ id: "anime", label: "ANIMES" },
 		{ id: "kdrama", label: "K-DRAMAS" },
 	];
+
+	const getTabUrl = (tabId) => {
+		const p = new URLSearchParams();
+		if (tabId !== "all") p.set("type", tabId);
+		if (searchQuery) p.set("q", searchQuery);
+		const qs = p.toString();
+		return qs ? `/history?${qs}` : "/history";
+	};
 
 	return (
 		<main className="min-h-screen bg-black text-white selection:bg-red-600 pb-32 md:pb-20">
@@ -49,9 +62,29 @@ export default async function HistoryPage({ searchParams }) {
 			</header>
 
 			<div className="max-w-7xl mx-auto px-4 md:px-12 mt-10">
-				<h2 className="text-2xl md:text-4xl font-black uppercase italic tracking-tighter mb-6 flex items-center gap-3">
-					<span className="text-red-600">///</span> HISTORIQUE DE VISIONNAGE
-				</h2>
+				<div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+					<h2 className="text-2xl md:text-4xl font-black uppercase italic tracking-tighter flex items-center gap-3">
+						<span className="text-red-600">///</span> HISTORIQUE
+					</h2>
+
+					{/* Barre de recherche */}
+					<form
+						action="/history"
+						method="GET"
+						className="relative w-full md:w-72"
+					>
+						{currentFilter !== "all" && (
+							<input type="hidden" name="type" value={currentFilter} />
+						)}
+						<input
+							type="text"
+							name="q"
+							placeholder="FILTRER L'HISTORIQUE..."
+							defaultValue={searchQuery}
+							className="w-full bg-zinc-900/90 border border-red-900/40 rounded-sm px-4 py-2.5 text-xs font-bold focus:outline-none focus:border-red-600 uppercase italic placeholder:text-zinc-600"
+						/>
+					</form>
+				</div>
 
 				{/* Sélecteur de catégorie */}
 				<div className="flex flex-wrap gap-2 md:gap-3 items-center pb-6 border-b border-red-900/30 mb-8">
@@ -60,7 +93,7 @@ export default async function HistoryPage({ searchParams }) {
 						return (
 							<Link
 								key={tab.id}
-								href={tab.id === "all" ? "/history" : `/history?type=${tab.id}`}
+								href={getTabUrl(tab.id)}
 								className={`px-4 py-2 text-[10px] md:text-xs font-black uppercase italic rounded-sm transition-all border ${
 									isActive
 										? "bg-red-600 border-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)] scale-105"
@@ -76,7 +109,9 @@ export default async function HistoryPage({ searchParams }) {
 				{/* Grille des résultats */}
 				{filteredHistory.length === 0 ? (
 					<div className="text-center py-20 text-zinc-500 font-black uppercase italic text-sm">
-						AUCUN CONTENU TROUVÉ DANS CETTE CATÉGORIE...
+						{searchQuery
+							? `AUCUN RÉSULTAT POUR "${searchQuery.toUpperCase()}"`
+							: "AUCUN CONTENU DANS CETTE CATÉGORIE..."}
 					</div>
 				) : (
 					<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-6">
