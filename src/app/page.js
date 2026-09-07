@@ -576,6 +576,22 @@ export default async function Home({ searchParams }) {
 								)}
 							</div>
 						))}
+
+						{/* Onglet Historique uniquement affiché si connecté */}
+						<SignedIn>
+							<Link
+								href="/watchlist"
+								className="text-zinc-400 hover:text-white hover:text-red-500 transition-colors border-l border-zinc-800 pl-4"
+							>
+								MA LISTE
+							</Link>
+							<Link
+								href="/history"
+								className="text-zinc-400 hover:text-white hover:text-red-500 transition-colors"
+							>
+								HISTORIQUE
+							</Link>
+						</SignedIn>
 					</nav>
 
 					<div className="flex items-center gap-4">
@@ -830,6 +846,22 @@ export default async function Home({ searchParams }) {
 										: "K-DRAMAS"}
 					</Link>
 				))}
+
+				{/* Lien Historique Mobile */}
+				<SignedIn>
+					<Link
+						href="/watchlist"
+						className="text-zinc-400 hover:text-white hover:text-red-500 transition-colors border-l border-zinc-800 pl-4"
+					>
+						MA LISTE
+					</Link>
+					<Link
+						href="/history"
+						className="text-zinc-400 hover:text-white hover:text-red-500 transition-colors"
+					>
+						HISTORIQUE
+					</Link>
+				</SignedIn>
 			</nav>
 		</main>
 	);

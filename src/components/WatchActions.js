@@ -9,9 +9,15 @@ export default function WatchActions({ mediaData, initialIsListed, t }) {
 	const { isSignedIn } = useAuth();
 
 	useEffect(() => {
-		if (isSignedIn) {
+		if (!isSignedIn) return;
+
+		// Enregistre dans l'historique après 2 minutes (120 000 ms)
+		const timer = setTimeout(() => {
 			saveToHistory(mediaData);
-		}
+		}, 150000);
+
+		// Annule le timer si l'utilisateur quitte la page avant les 2 minutes
+		return () => clearTimeout(timer);
 	}, [mediaData, isSignedIn]);
 
 	if (!isSignedIn) return null;
