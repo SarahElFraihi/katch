@@ -3,7 +3,7 @@ import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { getUserHistory, getUserWatchlist } from "@/lib/actions";
 
-// ─── TEXTES (tout en français, plus besoin de traductions) ───────────────────
+// ─── TEXTES ──────────────────────────────────────────────────────────────────
 const T = {
 	home: "Accueil",
 	movies: "Films",
@@ -14,8 +14,8 @@ const T = {
 	results: "Résultats pour",
 	no_results: "Aucun contenu trouvé...",
 	watch: "▶ REGARDER",
-	continue_watching: "REPRENDRE",
-	my_list: "MA LISTE",
+	continue_watching: "Reprendre la lecture",
+	my_list: "Ma Liste",
 	prev_page: "←",
 	next_page: "→",
 };
@@ -77,24 +77,41 @@ const GENRES = {
 	],
 };
 
-// ─── FETCH STANDARD (tendances / découverte) ─────────────────────────────────
-async function getData(type = "all", genreId = "", page = 1) {
+// ─── FETCH TMDB PERSONNALISÉ ────────────────────────────────────────────────
+async function getCustomCollection(endpoint, params = "") {
+	const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+	const res = await fetch(
+		`https://api.themoviedb.org/3/${endpoint}?api_key=${apiKey}&language=fr-FR${params}`,
+		{ next: { revalidate: 3600 } },
+	);
+	if (!res.ok) return [];
+	const data = await res.json();
+	return (data.results || []).filter(
+		(item) =>
+			item.poster_path && item.backdrop_path && item.media_type !== "person",
+	);
+}
+
+// ─── FETCH STANDARD & MULTI-GENRES ──────────────────────────────────────────
+async function getData(type = "all", genreParam = "", page = 1) {
 	const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
 
 	const getUrl = (p) => {
-		if (genreId) {
+		if (genreParam) {
 			const baseType = type === "anime" || type === "kdrama" ? "tv" : type;
 
-			// Filtres de langues spécifiques (Japonais pour Anime, Coréen pour KDrama)
 			let langFilter = "";
 			if (type === "anime")
 				langFilter = "&with_original_language=ja&with_genres=16";
 			if (type === "kdrama") langFilter = "&with_original_language=ko";
 
-			// Hack pour la catégorie "Zombies" avec les bons IDs TMDB
-			let filterParam = `&with_genres=${genreId}`;
-			if (genreId === "zombie") {
+			const tags = genreParam.split(",").filter(Boolean);
+			let filterParam = "";
+
+			if (tags.includes("zombie")) {
 				filterParam = `&with_keywords=12377|9759|14582`;
+			} else if (tags.length > 0) {
+				filterParam = `&with_genres=${tags.join(",")}`;
 			}
 
 			return `https://api.themoviedb.org/3/discover/${baseType}?api_key=${apiKey}&language=fr-FR${filterParam}${langFilter}&sort_by=popularity.desc&page=${p}`;
@@ -129,7 +146,7 @@ async function getData(type = "all", genreId = "", page = 1) {
 	};
 }
 
-// ─── RECHERCHE BILINGUE (FR + EN) avec score de pertinence ──────────────────
+// ─── RECHERCHE BILINGUE ─────────────────────────────────────────────────────
 async function searchData(type, query, page = 1) {
 	const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
 
@@ -141,7 +158,6 @@ async function searchData(type, query, page = 1) {
 		return `https://api.themoviedb.org/3/search/${searchType}?api_key=${apiKey}&language=${lang}&query=${encodeURIComponent(query)}&page=${p}&include_adult=false`;
 	};
 
-	// On cherche en français ET en anglais en parallèle, sur 2 pages chacun
 	const [frRes1, frRes2, enRes1, enRes2] = await Promise.all([
 		fetch(buildUrl("fr-FR", page * 2 - 1)),
 		fetch(buildUrl("fr-FR", page * 2)),
@@ -156,7 +172,6 @@ async function searchData(type, query, page = 1) {
 		enRes2.json(),
 	]);
 
-	// Fusionner tous les résultats
 	const allResults = [
 		...(frData1.results || []),
 		...(frData2.results || []),
@@ -164,12 +179,10 @@ async function searchData(type, query, page = 1) {
 		...(enData2.results || []),
 	];
 
-	// SÉCURITÉ : Filtrer strictement les personnes (acteurs, réals) et exiger un poster
 	const filtered = allResults.filter(
 		(item) => item.poster_path && item.media_type !== "person",
 	);
 
-	// Dédupliquer par ID (garder la version avec poster + backdrop si possible)
 	const map = new Map();
 	for (const item of filtered) {
 		const existing = map.get(item.id);
@@ -179,7 +192,6 @@ async function searchData(type, query, page = 1) {
 	}
 	const unique = Array.from(map.values());
 
-	// Filtrer par type si nécessaire
 	const typeFiltered = unique.filter((item) => {
 		if (type === "movie")
 			return item.media_type === "movie" || !item.media_type;
@@ -190,10 +202,9 @@ async function searchData(type, query, page = 1) {
 				(item.media_type === "tv" || !item.media_type) &&
 				item.original_language === "ko"
 			);
-		return true; // "all" → on garde tout
+		return true;
 	});
 
-	// ── Nouveau Score de pertinence (Boosté !) ──
 	const q = query.toLowerCase().trim();
 	const scored = typeFiltered.map((item) => {
 		const title = (item.title || item.name || "").toLowerCase();
@@ -203,26 +214,19 @@ async function searchData(type, query, page = 1) {
 			""
 		).toLowerCase();
 
-		// 1. La base du score EST la popularité brute de TMDB (plus de plafond !)
 		let score = item.popularity || 0;
-
-		// 2. Bonus de correspondance de texte ultra-forts
-		if (title === q || originalTitle === q)
-			score += 1000; // Correspondance exacte = Top direct
+		if (title === q || originalTitle === q) score += 1000;
 		else if (title.startsWith(q) || originalTitle.startsWith(q)) score += 300;
 		else if (title.includes(q) || originalTitle.includes(q)) score += 100;
 
-		// 3. Bonus "Gros Hit" : Les séries/films très connus ont beaucoup de votes
 		if (item.vote_count > 5000) score += 200;
 		else if (item.vote_count > 1000) score += 100;
 
-		// 4. Malus visuel si pas d'image de fond (on préfère les belles fiches)
 		if (!item.backdrop_path) score -= 150;
 
 		return { ...item, _score: score };
 	});
 
-	// Trier par score décroissant
 	scored.sort((a, b) => b._score - a._score);
 
 	return {
@@ -234,18 +238,19 @@ async function searchData(type, query, page = 1) {
 // ─── PAGE PRINCIPALE ─────────────────────────────────────────────────────────
 export default async function Home({ searchParams }) {
 	const sp = await searchParams;
-	// On ignore sp.lang — tout est en français désormais
 	const currentType = sp?.type || "all";
 	const query = sp?.q || "";
-	const genreId = sp?.genre || "";
+	const genreParam = sp?.genre || "";
 	const currentPage = parseInt(sp?.page) || 1;
+
+	const selectedTags = genreParam ? genreParam.split(",").filter(Boolean) : [];
 
 	const { userId } = await auth();
 	let history = [];
 	let watchlist = [];
 	let sections = [];
 	let heroItem = null;
-	const isSearchOrGenre = !!(query || genreId);
+	const isSearchOrGenre = !!(query || selectedTags.length > 0);
 
 	if (userId && !isSearchOrGenre) {
 		const [h, w] = await Promise.all([getUserHistory(), getUserWatchlist()]);
@@ -274,11 +279,11 @@ export default async function Home({ searchParams }) {
 			totalPages: Math.min(data.total_pages, 500),
 			currentPage,
 		});
-	} else if (genreId) {
-		// EXPLORATION PAR GENRE
+	} else if (selectedTags.length > 0) {
+		// EXPLORATION MULTI-TAGS
 		const data = await getData(
 			currentType === "all" ? "movie" : currentType,
-			genreId,
+			genreParam,
 			currentPage,
 		);
 		let items = data.results || [];
@@ -286,8 +291,17 @@ export default async function Home({ searchParams }) {
 			heroItem = items[0];
 			items = items.slice(1);
 		}
+
+		const activeGenreNames = selectedTags
+			.map(
+				(tagId) =>
+					GENRES[currentType]?.find((g) => g.id.toString() === tagId.toString())
+						?.name || tagId,
+			)
+			.join(" + ");
+
 		sections.push({
-			title: "Exploration",
+			title: `${activeGenreNames}`,
 			items: items.map((it) => ({
 				...it,
 				media_type: currentType === "anime" ? "anime" : it.media_type,
@@ -297,9 +311,44 @@ export default async function Home({ searchParams }) {
 			currentPage,
 		});
 	} else if (currentType === "all") {
-		// PAGE D'ACCUEIL
-		const trendingData = await getData("all");
+		// ─── ACCUEIL (Avec Top 10 Netflix et Plus de Catégories) ─────────────
+		const [
+			trendingData,
+			topMoviesRaw,
+			topSeriesRaw,
+			crimeList,
+			animationList,
+			horrorList,
+			comedyList,
+			scifiList,
+		] = await Promise.all([
+			getData("all"),
+			getCustomCollection("trending/movie/week"),
+			getCustomCollection("trending/tv/week"),
+			getCustomCollection(
+				"discover/movie",
+				"&with_genres=80&sort_by=popularity.desc",
+			),
+			getCustomCollection(
+				"discover/movie",
+				"&with_genres=16&sort_by=popularity.desc",
+			),
+			getCustomCollection(
+				"discover/movie",
+				"&with_genres=27&sort_by=popularity.desc",
+			),
+			getCustomCollection(
+				"discover/movie",
+				"&with_genres=35&sort_by=popularity.desc",
+			),
+			getCustomCollection(
+				"discover/movie",
+				"&with_genres=878&sort_by=popularity.desc",
+			),
+		]);
+
 		heroItem = trendingData.results?.[0];
+
 		if (history.length > 0)
 			sections.push({
 				title: T.continue_watching,
@@ -313,30 +362,70 @@ export default async function Home({ searchParams }) {
 				})),
 				isGrid: false,
 			});
+
 		if (watchlist.length > 0)
 			sections.push({
 				title: T.my_list,
 				items: watchlist.map((w) => ({ ...w, id: w.media_id })),
 				isGrid: false,
 			});
-		const [trendingMovies, trendingTV] = await Promise.all([
-			getData("movie"),
-			getData("tv"),
-		]);
+
 		sections.push({
-			title: `${T.trending} — ${T.movies}`,
-			items: trendingMovies.results,
+			title: "Tendances de la semaine",
+			items: trendingData.results?.slice(1) || [],
 			isGrid: false,
 		});
+
 		sections.push({
-			title: `${T.trending} — ${T.series}`,
-			items: trendingTV.results,
+			title: "Top 10 des films aujourd'hui",
+			items: topMoviesRaw
+				.slice(0, 10)
+				.map((it) => ({ ...it, media_type: "movie" })),
+			isTop10: true,
+		});
+
+		sections.push({
+			title: "Top 10 des séries aujourd'hui",
+			items: topSeriesRaw
+				.slice(0, 10)
+				.map((it) => ({ ...it, media_type: "tv" })),
+			isTop10: true,
+		});
+
+		sections.push({
+			title: "Crime",
+			items: crimeList.map((it) => ({ ...it, media_type: "movie" })),
+			isGrid: false,
+		});
+
+		sections.push({
+			title: "Animation",
+			items: animationList.map((it) => ({ ...it, media_type: "movie" })),
+			isGrid: false,
+		});
+
+		sections.push({
+			title: "Frissons & Horreur",
+			items: horrorList.map((it) => ({ ...it, media_type: "movie" })),
+			isGrid: false,
+		});
+
+		sections.push({
+			title: "Comédies",
+			items: comedyList.map((it) => ({ ...it, media_type: "movie" })),
+			isGrid: false,
+		});
+
+		sections.push({
+			title: "Science-Fiction",
+			items: scifiList.map((it) => ({ ...it, media_type: "movie" })),
 			isGrid: false,
 		});
 	} else {
-		// PAGE FILMS / SÉRIES / ANIMES
+		// ─── PAGES CATÉGORIES (Films, Séries, etc.) ──────────────────────────
 		const trendingData = await getData(currentType);
 		heroItem = trendingData.results?.[0];
+
 		if (history.length > 0)
 			sections.push({
 				title: T.continue_watching,
@@ -347,24 +436,28 @@ export default async function Home({ searchParams }) {
 				})),
 				isGrid: false,
 			});
+
 		if (watchlist.length > 0)
 			sections.push({
 				title: T.my_list,
 				items: watchlist.map((w) => ({ ...w, id: w.media_id })),
 				isGrid: false,
 			});
+
 		sections.push({
-			title: T.trending,
-			items: (trendingData.results?.slice(1) || []).map((it) => ({
+			title: `Top 10 — ${currentType === "movie" ? "Films" : currentType === "tv" ? "Séries" : currentType.toUpperCase()}`,
+			items: (trendingData.results?.slice(0, 10) || []).map((it) => ({
 				...it,
 				media_type: currentType,
 			})),
-			isGrid: false,
+			isTop10: true,
 		});
+
 		const topGenres = GENRES[currentType]?.slice(0, 4) || [];
 		const genreResults = await Promise.all(
 			topGenres.map((g) => getData(currentType, g.id.toString())),
 		);
+
 		topGenres.forEach((g, idx) => {
 			sections.push({
 				title: g.name,
@@ -377,25 +470,55 @@ export default async function Home({ searchParams }) {
 		});
 	}
 
-	// Pagination : liens helper
+	const getGenreFilterUrl = (targetTypeOrId, maybeGenreId) => {
+		// Gère l'appel à 1 paramètre getGenreFilterUrl(id) ou à 2 paramètres getGenreFilterUrl(type, id)
+		const targetType =
+			maybeGenreId !== undefined ? targetTypeOrId : currentType;
+		const genreId = maybeGenreId !== undefined ? maybeGenreId : targetTypeOrId;
+
+		if (genreId === undefined || genreId === null)
+			return `/?type=${targetType}`;
+		const strId = genreId.toString();
+		let updatedTags;
+
+		if (currentType === targetType) {
+			if (selectedTags.includes(strId)) {
+				updatedTags = selectedTags.filter((id) => id !== strId);
+			} else {
+				if (selectedTags.length >= 2) {
+					updatedTags = [selectedTags[1], strId];
+				} else {
+					updatedTags = [...selectedTags, strId];
+				}
+			}
+		} else {
+			updatedTags = [strId];
+		}
+
+		const params = new URLSearchParams({
+			type: targetType,
+			...(updatedTags.length > 0 ? { genre: updatedTags.join(",") } : {}),
+		});
+		return `/?${params.toString()}`;
+	};
+
 	const pageLink = (p) => {
 		const params = new URLSearchParams({
 			type: currentType,
 			q: query,
-			genre: genreId,
+			...(genreParam ? { genre: genreParam } : {}),
 			page: p,
 		});
 		return `/?${params.toString()}`;
 	};
-	const gridSection = sections.find((s) => s.isGrid);
 
 	return (
-		<main className="min-h-screen bg-black text-white selection:bg-red-600 pb-32 md:pb-20 overflow-x-hidden">
-			{/* ── HEADER DESKTOP ── */}
-			<header className="fixed top-0 w-full z-50 bg-black/80 backdrop-blur-md border-b border-red-900/50 hidden md:block">
+		<main className="min-h-screen bg-black text-white selection:bg-red-600 pb-32 md:pb-20 overflow-x-hidden font-sans">
+			{/* ── HEADER DESKTOP (Style Sobre KATCH) ── */}
+			<header className="fixed top-0 w-full z-50 bg-black/85 backdrop-blur-md border-b border-red-900/40 hidden md:block">
 				<div className="px-6 md:px-12 py-4 flex justify-between items-center gap-4">
 					<Link href="/">
-						<h1 className="text-4xl font-black uppercase italic tracking-tighter bg-gradient-to-r from-red-600 to-yellow-500 bg-clip-text text-transparent transform -skew-x-6 pr-2">
+						<h1 className="text-4xl font-black uppercase italic tracking-tighter text-red-600 transform -skew-x-6 pr-2">
 							KATCH
 						</h1>
 					</Link>
@@ -403,13 +526,13 @@ export default async function Home({ searchParams }) {
 					<nav className="flex items-center gap-6 text-xs font-black uppercase italic tracking-widest">
 						{["all", "movie", "tv", "anime", "kdrama"].map((type) => (
 							<div key={type} className="group relative py-2">
-								{/* 1. On enlève le !genreId pour que ça reste rouge quand on est dans une catégorie */}
-								{/* On ajoute group-hover:text-red-500 pour l'effet visuel quand on survole le menu */}
 								<Link
 									href={`/?type=${type}`}
 									className={`${
-										currentType === type ? "text-red-600" : "text-gray-400"
-									} hover:text-white group-hover:text-red-500 transition-colors`}
+										currentType === type
+											? "text-red-600 drop-shadow-[0_0_8px_rgba(220,38,38,0.8)]"
+											: "text-gray-400"
+									} hover:text-white group-hover:text-red-500 transition-colors py-2`}
 								>
 									{type === "all"
 										? T.home
@@ -422,23 +545,28 @@ export default async function Home({ searchParams }) {
 													: "K-DRAMAS"}
 								</Link>
 
-								{/* 2. Ton menu déroulant conservé */}
+								{/* Menu déroulant avec pont invisible pour empêcher la fermeture au survol */}
 								{type !== "all" && (
-									<div className="absolute top-full left-1/2 -translate-x-1/2 pt-4 hidden group-hover:block w-[320px]">
-										<div className="bg-zinc-900 border border-red-900/50 rounded-sm shadow-2xl p-3 grid grid-cols-2 gap-2">
-											{GENRES[type].map((g) => (
-												<Link
-													key={g.id}
-													href={`/?type=${type}&genre=${g.id}`}
-													className={`px-3 py-2 text-[10px] rounded-sm truncate transition-colors ${
-														genreId === g.id.toString() || genreId === g.id
-															? "bg-red-600 text-white" // Si on est sur ce genre, on le met en rouge dans le menu
-															: "bg-black hover:bg-red-600 hover:text-white text-gray-300"
-													}`}
-												>
-													{g.name}
-												</Link>
-											))}
+									<div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 hidden group-hover:block w-[320px] z-50">
+										<div className="bg-zinc-950 border border-red-900/40 rounded-sm shadow-2xl p-2.5 grid grid-cols-2 gap-2">
+											{GENRES[type]?.map((g) => {
+												const isSelected =
+													currentType === type &&
+													selectedTags.includes(g.id.toString());
+												return (
+													<Link
+														key={g.id}
+														href={getGenreFilterUrl(type, g.id)}
+														className={`px-3 py-2 text-[10px] font-black italic uppercase rounded-sm truncate transition-colors text-center ${
+															isSelected
+																? "bg-red-600 text-white"
+																: "bg-black text-white hover:bg-red-600 hover:text-white"
+														}`}
+													>
+														{g.name}
+													</Link>
+												);
+											})}
 										</div>
 									</div>
 								)}
@@ -447,14 +575,14 @@ export default async function Home({ searchParams }) {
 					</nav>
 
 					<div className="flex items-center gap-4">
-						<form action="/" method="GET" className="relative w-full">
+						<form action="/" method="GET" className="relative w-64">
 							<input type="hidden" name="type" value={currentType} />
 							<input
 								type="text"
 								name="q"
 								placeholder={T.search}
 								defaultValue={query}
-								className="w-full bg-zinc-900 border border-red-900/30 rounded-sm px-4 py-2 text-[10px] md:text-xs font-bold focus:outline-none focus:border-red-600 uppercase italic"
+								className="w-full bg-zinc-900/90 border border-red-900/30 rounded-sm px-4 py-2 text-[10px] md:text-xs font-bold focus:outline-none focus:border-red-600 uppercase italic placeholder:text-zinc-600"
 							/>
 						</form>
 						<SignedOut>
@@ -472,7 +600,7 @@ export default async function Home({ searchParams }) {
 			</header>
 
 			{/* ── HEADER MOBILE ── */}
-			<header className="md:hidden fixed top-0 w-full z-50 bg-gradient-to-b from-black via-black/80 to-transparent">
+			<header className="md:hidden fixed top-0 w-full z-50 bg-gradient-to-b from-black via-black/90 to-transparent">
 				<div className="px-4 py-3 flex justify-between items-center">
 					<Link href="/">
 						<h1 className="text-3xl font-black uppercase italic tracking-tighter text-red-600 transform -skew-x-6">
@@ -500,19 +628,19 @@ export default async function Home({ searchParams }) {
 							name="q"
 							placeholder={T.search}
 							defaultValue={query}
-							className="w-full bg-zinc-900 border border-red-900/30 rounded-sm px-4 py-2 text-[10px] md:text-xs font-bold focus:outline-none focus:border-red-600 uppercase italic"
+							className="w-full bg-zinc-900/90 border border-red-900/30 rounded-sm px-4 py-2 text-[10px] md:text-xs font-bold focus:outline-none focus:border-red-600 uppercase italic placeholder:text-zinc-600"
 						/>
 					</form>
 				</div>
 			</header>
 
-			{/* ── HERO ── */}
+			{/* ── HERO EXACT DE TA CAPTURE (Avec Titre Penché & Description) ── */}
 			{!query && heroItem && (
-				<section className="relative w-full h-[70vh] md:h-[85vh] flex items-end pb-12 md:pb-20 px-6 md:px-12">
+				<section className="relative w-full h-[72vh] md:h-[86vh] flex items-end pb-12 md:pb-20 px-6 md:px-12">
 					<div className="absolute inset-0">
 						<img
 							src={`https://image.tmdb.org/t/p/original${heroItem.poster_path}`}
-							className="md:hidden w-full h-full object-cover opacity-70"
+							className="md:hidden w-full h-full object-cover opacity-65"
 							alt=""
 						/>
 						<img
@@ -520,16 +648,22 @@ export default async function Home({ searchParams }) {
 							className="hidden md:block w-full h-full object-cover opacity-60"
 							alt=""
 						/>
-						<div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+						<div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
 					</div>
-					<div className="relative z-10 w-full text-center md:text-left">
-						<h2 className="text-4xl md:text-8xl font-black uppercase italic mb-4 leading-none transform -skew-x-3 drop-shadow-2xl">
+
+					<div className="relative z-10 w-full max-w-3xl text-center md:text-left">
+						<h2 className="text-4xl md:text-8xl font-black uppercase italic mb-3 leading-none transform -skew-x-6 drop-shadow-2xl tracking-tighter">
 							{heroItem.title || heroItem.name}
 						</h2>
+						{heroItem.overview && (
+							<p className="line-clamp-2 md:line-clamp-3 text-zinc-300 text-xs md:text-sm font-medium mb-6 drop-shadow-md max-w-xl">
+								{heroItem.overview}
+							</p>
+						)}
 						<Link
 							href={`/watch/${heroItem.id}?type=${currentType === "all" ? heroItem.media_type || "movie" : currentType}`}
 						>
-							<button className="bg-red-600 text-white px-8 md:px-12 py-3 md:py-4 font-black text-sm md:text-xl uppercase italic rounded-sm hover:scale-105 transition-all shadow-xl">
+							<button className="bg-red-600 text-white px-8 md:px-12 py-3 md:py-4 font-black text-sm md:text-xl uppercase italic rounded-sm hover:scale-105 transition-all shadow-lg shadow-red-900/50">
 								{T.watch}
 							</button>
 						</Link>
@@ -541,75 +675,64 @@ export default async function Home({ searchParams }) {
 			<div
 				className={`${!query && heroItem ? "-mt-10" : "pt-32"} relative z-20 flex flex-col gap-10`}
 			>
-				{/* ── BARRE DE FILTRES DE RECHERCHE (Affichée uniquement si on cherche un truc) ── */}
-				{query && (
-					<section className="px-4 md:px-12 pt-10 md:pt-4">
-						<div className="flex flex-wrap gap-2 md:gap-3 pb-4 items-center border-b border-red-900/30 mb-4">
-							<span className="text-[10px] md:text-xs font-black uppercase italic text-red-600 mr-2">
-								Filtrer :
-							</span>
-							{[
-								{ id: "all", label: "Tout" },
-								{ id: "movie", label: "Films" },
-								{ id: "tv", label: "Séries" },
-								{ id: "anime", label: "Animes" },
-								{ id: "kdrama", label: "K-Dramas" },
-							].map((filter) => (
-								<Link
-									key={filter.id}
-									href={`/?q=${encodeURIComponent(query)}&type=${filter.id}`}
-									className={`px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-black uppercase italic rounded-sm transition-all border ${
-										currentType === filter.id
-											? "bg-red-600 border-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]"
-											: "bg-black/50 border-white/10 text-zinc-400 hover:text-white hover:border-white/30 hover:bg-white/10"
-									}`}
-								>
-									{filter.label}
-								</Link>
-							))}
-						</div>
-					</section>
-				)}
-
-				{/* ── BARRE DE CATÉGORIES (Wrap au lieu du Scroll) ── */}
+				{/* ── BARRE MULTI-TAGS ── */}
 				{currentType !== "all" && !query && (
-					<section className="px-4 md:px-12 pt-10 md:pt-4">
-						<div className="flex flex-wrap gap-2 md:gap-3 pb-4 items-center">
-							{/* Bouton "Tout voir" */}
-							<Link
-								href={`/?type=${currentType}`}
-								className={`px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-black uppercase italic rounded-sm transition-all border ${
-									!genreId
-										? "bg-red-600 border-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]"
-										: "bg-black/50 border-white/10 text-zinc-400 hover:text-white hover:border-white/30 hover:bg-white/10"
-								}`}
-							>
-								Tout voir
-							</Link>
+					<section className="px-4 md:px-12 pt-8 md:pt-2">
+						<div className="flex flex-col gap-2 border-b border-red-900/30 pb-4">
+							<div className="flex justify-between items-center">
+								<span className="text-[10px] md:text-xs font-black uppercase italic text-red-600">
+									Filtres (Combine jusqu'à 2 tags) :
+								</span>
+								{selectedTags.length > 0 && (
+									<Link
+										href={`/?type=${currentType}`}
+										className="text-[9px] uppercase tracking-widest text-zinc-400 hover:text-white underline"
+									>
+										Réinitialiser
+									</Link>
+								)}
+							</div>
 
-							{/* Boucle sur les genres */}
-							{GENRES[currentType].map((g) => (
+							<div className="flex flex-wrap gap-2 md:gap-3 items-center mt-1">
 								<Link
-									key={g.id}
-									href={`/?type=${currentType}&genre=${g.id}`}
+									href={`/?type=${currentType}`}
 									className={`px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-black uppercase italic rounded-sm transition-all border ${
-										genreId === g.id.toString() || genreId === g.id
+										selectedTags.length === 0
 											? "bg-red-600 border-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]"
-											: "bg-black/50 border-white/10 text-zinc-400 hover:text-white hover:border-white/30 hover:bg-white/10"
+											: "bg-black/50 border-white/10 text-zinc-400 hover:text-white hover:border-white/30"
 									}`}
 								>
-									{g.name}
+									Tous
 								</Link>
-							))}
+
+								{GENRES[currentType]?.map((g) => {
+									const isSelected = selectedTags.includes(g.id.toString());
+									return (
+										<Link
+											key={g.id}
+											href={getGenreFilterUrl(currentType, g.id)}
+											className={`px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-black uppercase italic rounded-sm transition-all border ${
+												isSelected
+													? "bg-red-600 border-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)] scale-105"
+													: "bg-black/50 border-white/10 text-zinc-400 hover:text-white hover:border-white/30"
+											}`}
+										>
+											{g.name} {isSelected && "✕"}
+										</Link>
+									);
+								})}
+							</div>
 						</div>
 					</section>
 				)}
 
+				{/* ── SECTIONS ── */}
 				{sections.map((sec, idx) => (
 					<section key={idx} className="px-4 md:px-12">
-						<h3 className="text-lg md:text-2xl font-black uppercase italic mb-4 flex items-center gap-2">
+						<h3 className="text-lg md:text-2xl font-black uppercase italic mb-4 flex items-center gap-2 tracking-tight">
 							<span className="text-red-600">///</span> {sec.title}
 						</h3>
+
 						{sec.isGrid ? (
 							<>
 								{sec.items.length === 0 ? (
@@ -628,9 +751,9 @@ export default async function Home({ searchParams }) {
 										))}
 									</div>
 								)}
-								{/* Pagination */}
+
 								{sec.totalPages > 1 && (
-									<div className="flex items-center justify-center gap-4 mt-8">
+									<div className="flex items-center justify-center gap-4 mt-10">
 										{sec.currentPage > 1 && (
 											<Link href={pageLink(sec.currentPage - 1)}>
 												<button className="px-6 py-2 bg-zinc-900 border border-zinc-800 font-black text-xs uppercase hover:bg-red-600 hover:border-red-600 transition-all rounded-sm">
@@ -651,8 +774,21 @@ export default async function Home({ searchParams }) {
 									</div>
 								)}
 							</>
+						) : sec.isTop10 ? (
+							/* Rangée Top 10 SANS scroll vertical */
+							<div className="flex overflow-x-auto overflow-y-hidden gap-4 md:gap-8 pb-4 pt-4 custom-scrollbar h-[190px] md:h-[260px] items-end">
+								{sec.items.map((it, itemIdx) => (
+									<Top10Card
+										key={it.id}
+										item={it}
+										rank={itemIdx + 1}
+										currentType={currentType}
+									/>
+								))}
+							</div>
 						) : (
-							<div className="flex overflow-x-auto gap-3 md:gap-4 pb-4 custom-scrollbar">
+							/* Rangée Standard */
+							<div className="flex overflow-x-auto overflow-y-hidden gap-3 md:gap-4 pb-4 pt-2 custom-scrollbar">
 								{sec.items.map((it) => (
 									<PosterCard
 										key={it.id}
@@ -668,35 +804,34 @@ export default async function Home({ searchParams }) {
 			</div>
 
 			{/* ── BOTTOM NAV MOBILE ── */}
-			<nav className="md:hidden fixed bottom-0 w-full z-50 bg-black/90 backdrop-blur-md border-t border-red-900/50 flex justify-around items-center py-4 text-[10px] sm:text-xs font-black uppercase italic tracking-widest">
+			<nav className="md:hidden fixed bottom-0 w-full z-50 bg-black/95 backdrop-blur-md border-t border-red-900/50 flex justify-around items-center py-4 text-[10px] sm:text-xs font-black uppercase italic tracking-widest">
 				{["all", "movie", "tv", "anime", "kdrama"].map((type) => (
-					<div key={type} className="group relative py-2">
-						<Link
-							href={`/?type=${type}`}
-							className={`${
-								currentType === type
-									? "text-red-600 drop-shadow-[0_0_8px_rgba(220,38,38,0.8)] scale-105"
-									: "text-gray-400"
-							} inline-block hover:text-white hover:scale-110 transition-all duration-300`}
-						>
-							{type === "all"
-								? T.home
-								: type === "movie"
-									? T.movies
-									: type === "tv"
-										? T.series
-										: type === "anime"
-											? T.animes
-											: "K-DRAMAS"}
-						</Link>
-					</div>
+					<Link
+						key={type}
+						href={`/?type=${type}`}
+						className={`${
+							currentType === type
+								? "text-red-600 drop-shadow-[0_0_8px_rgba(220,38,38,0.8)] scale-105"
+								: "text-gray-400"
+						} inline-block hover:text-white transition-all`}
+					>
+						{type === "all"
+							? T.home
+							: type === "movie"
+								? T.movies
+								: type === "tv"
+									? T.series
+									: type === "anime"
+										? T.animes
+										: "K-DRAMAS"}
+					</Link>
 				))}
 			</nav>
 		</main>
 	);
 }
 
-// ─── CARTE POSTER ─────────────────────────────────────────────────────────────
+// ─── CARTE POSTER AVEC ZOOM FLUIDE ───────────────────────────────────────────
 const PosterCard = ({ item, currentType, isGrid }) => {
 	const mediaType =
 		item.media_type ||
@@ -709,9 +844,11 @@ const PosterCard = ({ item, currentType, isGrid }) => {
 	return (
 		<Link
 			href={watchUrl}
-			className={`group flex flex-col gap-2 ${isGrid ? "w-full" : "flex-none w-[110px] md:w-[180px]"}`}
+			className={`group flex flex-col gap-2 transition-transform duration-300 ease-out md:hover:scale-105 md:hover:z-30 will-change-transform ${
+				isGrid ? "w-full" : "flex-none w-[115px] md:w-[175px]"
+			}`}
 		>
-			<div className="relative aspect-[2/3] overflow-hidden rounded-sm shadow-lg transition-all duration-300 md:group-hover:scale-105 md:group-hover:ring-2 group-hover:ring-red-600 ring-offset-2 ring-offset-black">
+			<div className="relative aspect-[2/3] overflow-hidden rounded-sm shadow-lg border border-transparent group-hover:border-red-600 transition-colors duration-200 bg-zinc-900 shadow-black/80">
 				{item.progress && (
 					<div className="absolute top-1 left-1 bg-red-600 text-white px-1.5 py-0.5 text-[7px] md:text-[9px] font-black uppercase rounded-xs z-10">
 						{item.progress}
@@ -723,9 +860,42 @@ const PosterCard = ({ item, currentType, isGrid }) => {
 					className="w-full h-full object-cover"
 				/>
 			</div>
-			<h4 className="font-bold text-[9px] md:text-xs uppercase text-zinc-400 truncate">
+			<h4 className="font-bold text-[9px] md:text-xs uppercase text-zinc-400 group-hover:text-white truncate transition-colors">
 				{item.title || item.name}
 			</h4>
+		</Link>
+	);
+};
+
+// ─── CARTE TOP 10 NETFLIX SANS SCROLL VERTICAL ───────────────────────────────
+const Top10Card = ({ item, rank, currentType }) => {
+	const mediaType =
+		item.media_type || (currentType === "all" ? "movie" : currentType);
+	const watchUrl = `/watch/${item.id}?type=${mediaType}`;
+
+	return (
+		<Link
+			href={watchUrl}
+			className="group flex-none relative flex items-end pl-8 md:pl-12 w-[155px] md:w-[225px] h-[165px] md:h-[240px]"
+		>
+			{/* Chiffre calé précisément en bas pour éviter tout overflow vertical */}
+			<span
+				className="absolute -left-1 md:-left-2 -bottom-2 text-[95px] md:text-[140px] font-black leading-none select-none pointer-events-none text-black"
+				style={{
+					WebkitTextStroke: "3px #52525b",
+				}}
+			>
+				{rank}
+			</span>
+
+			{/* Affiche avec zoom confiné à l'image */}
+			<div className="relative z-10 w-[110px] md:w-[155px] aspect-[2/3] overflow-hidden rounded-sm shadow-2xl bg-zinc-900 border border-zinc-800 group-hover:border-red-600 transition-colors duration-200">
+				<img
+					src={`https://image.tmdb.org/t/p/w500${item.poster_path}`}
+					alt={item.title || item.name || ""}
+					className="w-full h-full object-cover transition-transform duration-300 ease-out will-change-transform group-hover:scale-105"
+				/>
+			</div>
 		</Link>
 	);
 };
