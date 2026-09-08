@@ -92,7 +92,7 @@ async function getCustomCollection(endpoint, params = "") {
 	);
 }
 
-// ─── FETCH STANDARD & MULTI-GENRES ──────────────────────────────────────────
+// ─── FETCH STANDARD & MULTI-GENRES (AVEC CACHE NEXT.JS) ──────────────────────
 async function getData(type = "all", genreParam = "", page = 1) {
 	const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
 
@@ -106,7 +106,6 @@ async function getData(type = "all", genreParam = "", page = 1) {
 
 			const tags = genreParam.split(",").filter(Boolean);
 
-			// Pour les animes, on force toujours le genre Animation (16) en plus des sous-genres demandés
 			if (type === "anime" && !tags.includes("16")) {
 				tags.push("16");
 			}
@@ -131,9 +130,12 @@ async function getData(type = "all", genreParam = "", page = 1) {
 		return `https://api.themoviedb.org/3/trending/${type}/week?api_key=${apiKey}&language=fr-FR&page=${p}`;
 	};
 
+	// 1 heure de cache pour éviter de marteler TMDB à chaque clic de navigation
+	const fetchOptions = { next: { revalidate: 3600 } };
+
 	const [res1, res2] = await Promise.all([
-		fetch(getUrl(page * 2 - 1)),
-		fetch(getUrl(page * 2)),
+		fetch(getUrl(page * 2 - 1), fetchOptions),
+		fetch(getUrl(page * 2), fetchOptions),
 	]);
 	const [data1, data2] = await Promise.all([res1.json(), res2.json()]);
 	const combined = [...(data1.results || []), ...(data2.results || [])];
@@ -315,7 +317,10 @@ export default async function Home({ searchParams }) {
 			currentPage,
 		});
 	} else if (currentType === "all") {
-		// ─── ACCUEIL (Avec Top 10 Netflix et Plus de Catégories) ─────────────
+		// Récupère les likes d'abord pour paralléliser immédiatement la recommandation TMDB
+		const userLiked = userId ? await getUserLiked() : [];
+		const lastLiked = userLiked?.[0];
+
 		const [
 			trendingData,
 			topMoviesRaw,
@@ -325,7 +330,7 @@ export default async function Home({ searchParams }) {
 			horrorList,
 			comedyList,
 			scifiList,
-			userLiked,
+			recs,
 		] = await Promise.all([
 			getData("all"),
 			getCustomCollection("trending/movie/week"),
@@ -350,7 +355,9 @@ export default async function Home({ searchParams }) {
 				"discover/movie",
 				"&with_genres=878&sort_by=popularity.desc",
 			),
-			userId ? getUserLiked() : Promise.resolve([]),
+			lastLiked
+				? getRecommendationsForMedia(lastLiked.media_id, lastLiked.media_type)
+				: Promise.resolve([]),
 		]);
 
 		heroItem = trendingData.results?.[0];
@@ -377,23 +384,15 @@ export default async function Home({ searchParams }) {
 			});
 
 		// ─── RECOMMANDATIONS BASÉES SUR LE DERNIER TITRE LIKÉ ───
-		if (userLiked && userLiked.length > 0) {
-			const lastLiked = userLiked[0];
-			const recs = await getRecommendationsForMedia(
-				lastLiked.media_id,
-				lastLiked.media_type,
-			);
-
-			if (recs.length > 0) {
-				sections.push({
-					title: `Parce que vous avez aimé "${lastLiked.title}"`,
-					items: recs.map((it) => ({
-						...it,
-						media_type: lastLiked.media_type || "movie",
-					})),
-					isGrid: false,
-				});
-			}
+		if (lastLiked && recs.length > 0) {
+			sections.push({
+				title: `Parce que vous avez aimé "${lastLiked.title}"`,
+				items: recs.map((it) => ({
+					...it,
+					media_type: lastLiked.media_type || "movie",
+				})),
+				isGrid: false,
+			});
 		}
 
 		sections.push({
