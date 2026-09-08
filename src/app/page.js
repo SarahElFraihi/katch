@@ -893,7 +893,11 @@ export default async function Home({ searchParams }) {
 const PosterCard = ({ item, currentType, isGrid }) => {
 	const mediaType =
 		item.media_type ||
-		(currentType === "anime" ? "anime" : currentType) ||
+		(currentType === "anime"
+			? "anime"
+			: currentType === "kdrama"
+				? "kdrama"
+				: currentType) ||
 		"movie";
 	const watchUrl = item.progress
 		? `/watch/${item.id}?type=${mediaType}&s=${item.progress.split(" ")[0].replace("S", "")}&e=${item.progress.split(" ")[1].replace("E", "")}`
@@ -928,7 +932,13 @@ const PosterCard = ({ item, currentType, isGrid }) => {
 // ─── CARTE TOP 10 GÉANTE (STYLE NETFLIX XXL) ─────────────────────────────────
 const Top10Card = ({ item, rank, currentType }) => {
 	const mediaType =
-		item.media_type || (currentType === "all" ? "movie" : currentType);
+		item.media_type ||
+		(currentType === "anime"
+			? "anime"
+			: currentType === "kdrama"
+				? "kdrama"
+				: currentType) ||
+		"movie";
 	const watchUrl = `/watch/${item.id}?type=${mediaType}`;
 
 	return (

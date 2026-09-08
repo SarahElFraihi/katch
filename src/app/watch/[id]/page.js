@@ -92,7 +92,8 @@ export default async function WatchPage({ params, searchParams }) {
 			</div>
 		);
 
-	const isSeriesOrAnime = type === "tv" || type === "anime";
+	const isSeriesOrAnime =
+		type === "tv" || type === "anime" || type === "kdrama";
 	const seasonData = isSeriesOrAnime
 		? await getSeasonDetails(id, currentSeason)
 		: null;
