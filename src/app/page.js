@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
-import { getUserHistory, getUserWatchlist } from "@/lib/actions";
+import { getUserHistory, getUserWatchlist, getUserLiked } from "@/lib/actions";
 
 // ─── TEXTES ──────────────────────────────────────────────────────────────────
 const T = {
@@ -325,6 +325,7 @@ export default async function Home({ searchParams }) {
 			horrorList,
 			comedyList,
 			scifiList,
+			userLiked,
 		] = await Promise.all([
 			getData("all"),
 			getCustomCollection("trending/movie/week"),
@@ -349,6 +350,7 @@ export default async function Home({ searchParams }) {
 				"discover/movie",
 				"&with_genres=878&sort_by=popularity.desc",
 			),
+			userId ? getUserLiked() : Promise.resolve([]),
 		]);
 
 		heroItem = trendingData.results?.[0];
@@ -373,6 +375,26 @@ export default async function Home({ searchParams }) {
 				items: watchlist.map((w) => ({ ...w, id: w.media_id })),
 				isGrid: false,
 			});
+
+		// ─── RECOMMANDATIONS BASÉES SUR LE DERNIER TITRE LIKÉ ───
+		if (userLiked && userLiked.length > 0) {
+			const lastLiked = userLiked[0];
+			const recs = await getRecommendationsForMedia(
+				lastLiked.media_id,
+				lastLiked.media_type,
+			);
+
+			if (recs.length > 0) {
+				sections.push({
+					title: `Parce que vous avez aimé "${lastLiked.title}"`,
+					items: recs.map((it) => ({
+						...it,
+						media_type: lastLiked.media_type || "movie",
+					})),
+					isGrid: false,
+				});
+			}
+		}
 
 		sections.push({
 			title: "Tendances de la semaine",
@@ -795,8 +817,8 @@ export default async function Home({ searchParams }) {
 								)}
 							</>
 						) : sec.isTop10 ? (
-							/* Rangée Top 10 SANS scroll vertical */
-							<div className="flex overflow-x-auto overflow-y-hidden gap-4 md:gap-8 pb-4 pt-4 custom-scrollbar h-[190px] md:h-[260px] items-end">
+							/* Carrousel Top 10 géant sans coupure verticale */
+							<div className="flex overflow-x-auto overflow-y-hidden gap-8 md:gap-12 pb-6 pt-4 custom-scrollbar h-[320px] md:h-[400px] items-end">
 								{sec.items.map((it, itemIdx) => (
 									<Top10Card
 										key={it.id}
@@ -867,7 +889,7 @@ export default async function Home({ searchParams }) {
 	);
 }
 
-// ─── CARTE POSTER AVEC ZOOM FLUIDE ───────────────────────────────────────────
+// ─── CARTE POSTER STANDARD (AGRANDIE DE 33% SUR MOBILE) ─────────────────────────
 const PosterCard = ({ item, currentType, isGrid }) => {
 	const mediaType =
 		item.media_type ||
@@ -881,7 +903,7 @@ const PosterCard = ({ item, currentType, isGrid }) => {
 		<Link
 			href={watchUrl}
 			className={`group flex flex-col gap-2 transition-transform duration-300 ease-out md:hover:scale-105 md:hover:z-30 will-change-transform ${
-				isGrid ? "w-full" : "flex-none w-[115px] md:w-[175px]"
+				isGrid ? "w-full" : "flex-none w-[153px] md:w-[175px]"
 			}`}
 		>
 			<div className="relative aspect-[2/3] overflow-hidden rounded-sm shadow-lg border border-transparent group-hover:border-red-600 transition-colors duration-200 bg-zinc-900 shadow-black/80">
@@ -903,7 +925,7 @@ const PosterCard = ({ item, currentType, isGrid }) => {
 	);
 };
 
-// ─── CARTE TOP 10 NETFLIX SANS SCROLL VERTICAL ───────────────────────────────
+// ─── CARTE TOP 10 GÉANTE (STYLE NETFLIX XXL) ─────────────────────────────────
 const Top10Card = ({ item, rank, currentType }) => {
 	const mediaType =
 		item.media_type || (currentType === "all" ? "movie" : currentType);
@@ -912,26 +934,39 @@ const Top10Card = ({ item, rank, currentType }) => {
 	return (
 		<Link
 			href={watchUrl}
-			className="group flex-none relative flex items-end pl-8 md:pl-12 w-[155px] md:w-[225px] h-[165px] md:h-[240px]"
+			className="group flex-none relative flex items-end pl-14 md:pl-20 w-[240px] md:w-[310px] transition-transform duration-300 ease-out md:hover:scale-105 will-change-transform"
 		>
-			{/* Chiffre calé précisément en bas pour éviter tout overflow vertical */}
+			{/* Chiffre XXL avec double contour contrasté */}
 			<span
-				className="absolute -left-1 md:-left-2 -bottom-2 text-[95px] md:text-[140px] font-black leading-none select-none pointer-events-none text-black"
+				className="absolute left-0 -bottom-4 text-[160px] md:text-[220px] font-black leading-none select-none pointer-events-none text-black z-0"
 				style={{
-					WebkitTextStroke: "3px #52525b",
+					WebkitTextStroke: "4px #52525b",
+					filter: "drop-shadow(0 0 12px rgba(0,0,0,0.9))",
 				}}
 			>
 				{rank}
 			</span>
 
-			{/* Affiche avec zoom confiné à l'image */}
-			<div className="relative z-10 w-[110px] md:w-[155px] aspect-[2/3] overflow-hidden rounded-sm shadow-2xl bg-zinc-900 border border-zinc-800 group-hover:border-red-600 transition-colors duration-200">
+			{/* Affiche agrandie conservant son ratio 2/3 */}
+			<div className="relative z-10 w-[185px] md:w-[240px] aspect-[2/3] shrink-0 overflow-hidden rounded-sm shadow-2xl bg-zinc-900 border border-zinc-800 group-hover:border-red-600 transition-colors duration-200">
 				<img
 					src={`https://image.tmdb.org/t/p/w500${item.poster_path}`}
 					alt={item.title || item.name || ""}
-					className="w-full h-full object-cover transition-transform duration-300 ease-out will-change-transform group-hover:scale-105"
+					className="w-full h-full object-cover"
 				/>
 			</div>
 		</Link>
 	);
 };
+
+async function getRecommendationsForMedia(id, type = "movie") {
+	const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY; //
+	const endpoint = type === "movie" ? "movie" : "tv"; //[cite: 3]
+	const res = await fetch(
+		`https://api.themoviedb.org/3/${endpoint}/${id}/recommendations?language=fr-FR&api_key=${apiKey}`, //[cite: 3]
+		{ next: { revalidate: 3600 } },
+	);
+	if (!res.ok) return []; //[cite: 3]
+	const data = await res.json(); //[cite: 3]
+	return (data.results || []).filter((item) => item.poster_path); //[cite: 3]
+}

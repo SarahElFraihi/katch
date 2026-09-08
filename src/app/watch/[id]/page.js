@@ -1,6 +1,6 @@
 import Link from "next/link";
 import WatchActions from "@/components/WatchActions";
-import { checkWatchlist } from "@/lib/actions";
+import { checkWatchlist, checkLiked } from "@/lib/actions";
 import PlayerWrapper from "@/components/PlayerWrapper";
 import InstallPrompt from "@/components/InstallPrompt";
 import SecurityShield from "@/components/SecurityShield";
@@ -159,7 +159,10 @@ export default async function WatchPage({ params, searchParams }) {
 	).substring(0, 4);
 	const rating = data.vote_average ? data.vote_average.toFixed(1) : "";
 
-	const isListed = await checkWatchlist(id);
+	const [isListed, isLiked] = await Promise.all([
+		checkWatchlist(id),
+		checkLiked(id),
+	]);
 	const mediaDataForDb = {
 		id,
 		type,
@@ -217,6 +220,7 @@ export default async function WatchPage({ params, searchParams }) {
 					<WatchActions
 						mediaData={mediaDataForDb}
 						initialIsListed={isListed}
+						initialIsLiked={isLiked}
 						t={{ in_list: "DANS MA LISTE", add_list: "MA LISTE" }}
 					/>
 				</div>

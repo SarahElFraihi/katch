@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { getUserHistory } from "@/lib/actions";
+import { getUserHistory, getUserLiked } from "@/lib/actions";
 
 export const metadata = {
-	title: "Historique de visionnage - KATCH",
+	title: "Historique & Likes - KATCH",
 };
 
 export default async function HistoryPage({ searchParams }) {
@@ -15,13 +15,17 @@ export default async function HistoryPage({ searchParams }) {
 	}
 
 	const sp = await searchParams;
+	const viewMode = sp?.view === "likes" ? "likes" : "history";
 	const currentFilter = sp?.type || "all";
 	const searchQuery = (sp?.q || "").trim().toLowerCase();
 
-	const allHistory = (await getUserHistory()) || [];
+	// Récupération conditionnelle selon l'onglet actif (Vu ou Likés)
+	const rawItems =
+		viewMode === "likes" ? await getUserLiked() : await getUserHistory();
+	const allItems = rawItems || [];
 
 	// Filtrage par type + recherche par titre
-	const filteredHistory = allHistory.filter((item) => {
+	const filteredItems = allItems.filter((item) => {
 		const matchesType =
 			currentFilter === "all" || item.media_type === currentFilter;
 		const matchesQuery =
@@ -38,10 +42,16 @@ export default async function HistoryPage({ searchParams }) {
 		{ id: "kdrama", label: "K-DRAMAS" },
 	];
 
-	const getTabUrl = (tabId) => {
+	const buildUrl = (newView, newType, newQuery) => {
 		const p = new URLSearchParams();
-		if (tabId !== "all") p.set("type", tabId);
-		if (searchQuery) p.set("q", searchQuery);
+		const v = newView !== undefined ? newView : viewMode;
+		const t = newType !== undefined ? newType : currentFilter;
+		const q = newQuery !== undefined ? newQuery : searchQuery;
+
+		if (v === "likes") p.set("view", "likes");
+		if (t !== "all") p.set("type", t);
+		if (q) p.set("q", q);
+
 		const qs = p.toString();
 		return qs ? `/history?${qs}` : "/history";
 	};
@@ -62,10 +72,42 @@ export default async function HistoryPage({ searchParams }) {
 			</header>
 
 			<div className="max-w-7xl mx-auto px-4 md:px-12 mt-10">
+				{/* Titre & Sélecteur de Mode (Historique / Likes) */}
 				<div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-					<h2 className="text-2xl md:text-4xl font-black uppercase italic tracking-tighter flex items-center gap-3">
-						<span className="text-red-600">///</span> HISTORIQUE
-					</h2>
+					<div className="flex items-center gap-3">
+						<Link
+							href={buildUrl("history", currentFilter, searchQuery)}
+							className={`text-xl md:text-3xl font-black uppercase italic tracking-tighter transition-all flex items-center gap-2 ${
+								viewMode === "history"
+									? "text-white"
+									: "text-zinc-600 hover:text-zinc-400"
+							}`}
+						>
+							<span className="text-red-600">///</span> HISTORIQUE
+						</Link>
+
+						<span className="text-zinc-700 text-xl md:text-3xl font-black">
+							|
+						</span>
+
+						<Link
+							href={buildUrl("likes", currentFilter, searchQuery)}
+							className={`text-xl md:text-3xl font-black uppercase italic tracking-tighter transition-all flex items-center gap-2 ${
+								viewMode === "likes"
+									? "text-white"
+									: "text-zinc-600 hover:text-zinc-400"
+							}`}
+						>
+							<span
+								className={
+									viewMode === "likes" ? "text-red-600" : "text-zinc-600"
+								}
+							>
+								♥
+							</span>{" "}
+							CONTENUS LIKÉS
+						</Link>
+					</div>
 
 					{/* Barre de recherche */}
 					<form
@@ -73,27 +115,34 @@ export default async function HistoryPage({ searchParams }) {
 						method="GET"
 						className="relative w-full md:w-72"
 					>
+						{viewMode === "likes" && (
+							<input type="hidden" name="view" value="likes" />
+						)}
 						{currentFilter !== "all" && (
 							<input type="hidden" name="type" value={currentFilter} />
 						)}
 						<input
 							type="text"
 							name="q"
-							placeholder="FILTRER L'HISTORIQUE..."
+							placeholder={
+								viewMode === "likes"
+									? "FILTRER LES LIKES..."
+									: "FILTRER L'HISTORIQUE..."
+							}
 							defaultValue={searchQuery}
 							className="w-full bg-zinc-900/90 border border-red-900/40 rounded-sm px-4 py-2.5 text-xs font-bold focus:outline-none focus:border-red-600 uppercase italic placeholder:text-zinc-600"
 						/>
 					</form>
 				</div>
 
-				{/* Sélecteur de catégorie */}
+				{/* Sélecteur de format */}
 				<div className="flex flex-wrap gap-2 md:gap-3 items-center pb-6 border-b border-red-900/30 mb-8">
 					{tabs.map((tab) => {
 						const isActive = currentFilter === tab.id;
 						return (
 							<Link
 								key={tab.id}
-								href={getTabUrl(tab.id)}
+								href={buildUrl(viewMode, tab.id, searchQuery)}
 								className={`px-4 py-2 text-[10px] md:text-xs font-black uppercase italic rounded-sm transition-all border ${
 									isActive
 										? "bg-red-600 border-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)] scale-105"
@@ -107,17 +156,20 @@ export default async function HistoryPage({ searchParams }) {
 				</div>
 
 				{/* Grille des résultats */}
-				{filteredHistory.length === 0 ? (
+				{filteredItems.length === 0 ? (
 					<div className="text-center py-20 text-zinc-500 font-black uppercase italic text-sm">
 						{searchQuery
 							? `AUCUN RÉSULTAT POUR "${searchQuery.toUpperCase()}"`
-							: "AUCUN CONTENU DANS CETTE CATÉGORIE..."}
+							: viewMode === "likes"
+								? "AUCUN TITRE LIKÉ DANS CETTE CATÉGORIE..."
+								: "AUCUN CONTENU DANS CETTE CATÉGORIE..."}
 					</div>
 				) : (
 					<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-6">
-						{filteredHistory.map((item) => {
+						{filteredItems.map((item) => {
 							const progress =
-								item.media_type === "tv" || item.media_type === "anime"
+								viewMode === "history" &&
+								(item.media_type === "tv" || item.media_type === "anime")
 									? `S${item.season} E${item.episode}`
 									: null;
 
@@ -135,6 +187,11 @@ export default async function HistoryPage({ searchParams }) {
 										{progress && (
 											<div className="absolute top-1 left-1 bg-red-600 text-white px-1.5 py-0.5 text-[7px] md:text-[9px] font-black uppercase rounded-xs z-10 shadow-md">
 												{progress}
+											</div>
+										)}
+										{viewMode === "likes" && (
+											<div className="absolute top-1 right-1 bg-black/70 text-red-500 px-1.5 py-0.5 text-[10px] rounded-xs z-10">
+												♥
 											</div>
 										)}
 										<img

@@ -98,3 +98,76 @@ export async function getUserWatchlist() {
 
 	return data || [];
 }
+
+// 6. Vérifier si un titre est liké
+export async function checkLiked(mediaId) {
+	const { userId } = await auth();
+	if (!userId || !mediaId) return false;
+
+	const numericId = parseInt(mediaId, 10);
+
+	const { data, error } = await supabase
+		.from("likes")
+		.select("id")
+		.eq("user_id", userId)
+		.eq("media_id", numericId)
+		.maybeSingle();
+
+	if (error) {
+		console.error("Erreur checkLiked:", error);
+		return false;
+	}
+
+	return !!data;
+}
+
+// 7. Liker / Dé-liker (Toggle Like)
+export async function toggleLike(mediaData) {
+	const { userId } = await auth();
+	if (!userId || !mediaData?.id) return false;
+
+	const numericId = parseInt(mediaData.id, 10);
+
+	// Vérifie si déjà liké
+	const { data } = await supabase
+		.from("likes")
+		.select("id")
+		.eq("user_id", userId)
+		.eq("media_id", numericId)
+		.maybeSingle();
+
+	if (data) {
+		const { error } = await supabase.from("likes").delete().eq("id", data.id);
+		if (error) console.error("Erreur suppression like:", error);
+		return false;
+	} else {
+		const { error } = await supabase.from("likes").insert({
+			user_id: userId,
+			media_id: numericId,
+			media_type: mediaData.type || "movie",
+			title: mediaData.title || "",
+			poster_path: mediaData.poster_path || "",
+		});
+		if (error) console.error("Erreur insertion like:", error);
+		return true;
+	}
+}
+
+// 8. Récupérer les titres likés par l'utilisateur
+export async function getUserLiked() {
+	const { userId } = await auth();
+	if (!userId) return [];
+
+	const { data, error } = await supabase
+		.from("likes")
+		.select("*")
+		.eq("user_id", userId)
+		.order("created_at", { ascending: false });
+
+	if (error) {
+		console.error("Erreur getUserLiked:", error);
+		return [];
+	}
+
+	return data || [];
+}
